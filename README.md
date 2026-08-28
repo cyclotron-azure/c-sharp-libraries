@@ -119,14 +119,19 @@ Two workflows, neither of them per-package. Adding a library never means adding 
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | pull requests, pushes to `main` | builds and tests the whole solution on `ubuntu-latest` and `windows-latest`. Publishes nothing. |
+| [`ci.yml`](.github/workflows/ci.yml) | pull requests, pushes to `main` | builds and tests the whole solution on `ubuntu-latest`. Publishes nothing. |
 | [`release.yml`](.github/workflows/release.yml) | tag `Cyclotron.*-v*` | derives the package from the tag, builds and tests the repo, then packs and pushes **only that package** |
 
 Build and test deliberately run against the solution rather than one package: the value of a
 monorepo is that a change to `Cyclotron.Graph.Core` is checked against `Cyclotron.Graph.Mail`'s
-tests in the same run, which a per-package pipeline cannot do. The OS matrix is not ceremony —
-`Uri`, path, and culture handling have all differed between Windows and Linux here, and a
-Linux-only pipeline lets those reach `main` from a Windows dev machine.
+tests in the same run, which a per-package pipeline cannot do.
+
+CI runs on Linux only, because Linux is what we deploy on. Cross-platform differences are real in
+this code — `Uri.TryCreate(UriKind.Absolute)` accepts a rooted path such as `/notifications` on
+Linux but rejects it on Windows, which produced a validator bug — but they are already covered
+from both sides: CI gates the deployment platform, and developer machines are Windows, so
+Windows-only breakage shows up locally as soon as it is written. A second runner would bill 2x
+Linux minutes on an internal repo to gate what is exercised every day anyway.
 
 `ci.yml` needs no feed credentials at all: sibling libraries build from source and source mapping
 means no `Cyclotron.*` package is ever requested, so it works on pull requests from forks.
@@ -151,6 +156,11 @@ git push origin Cyclotron.Graph.Core-v0.0.2
 The workflow parses the package id and version straight out of the tag, and fails before pushing
 if MinVer resolves a version that disagrees with it. The tag must point at a commit that already
 contains the workflow, so push your commits first.
+
+There is no "cut a release" button, by design — pushing the tag *is* the release. The **Run
+workflow** button on `release.yml` exists only to re-run an **existing** tag (say a push step
+failed after the tag was already created); it takes the tag as an input and rejects anything that
+is not one, so it can never invent a version that has no tag behind it.
 
 ## Consuming these packages
 

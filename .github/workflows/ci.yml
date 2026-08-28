@@ -13,14 +13,11 @@ env:
 
 jobs:
   test:
-    # Windows and Linux disagree about more than line endings — Uri parsing, path handling and
-    # culture rules have all produced green-here/red-there bugs in this repo. Test both.
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-
-    runs-on: ${{ matrix.os }}
+    # Linux only, deliberately: it is what we deploy on, so it is the platform whose behaviour
+    # has to be green. Developer machines are Windows, which means Windows-only breakage surfaces
+    # locally the moment it is introduced — a second runner would bill 2x Linux minutes on an
+    # internal repo to gate something already exercised every day.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
 

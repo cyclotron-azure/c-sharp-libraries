@@ -6,6 +6,14 @@ on:
   push:
     tags:
       - 'Cyclotron.*-v*'
+  # Manual re-run of an EXISTING tag — for when a release run failed after the tag was pushed.
+  # The tag stays the source of truth: this never invents a version, it rebuilds one already cut.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag, e.g. Cyclotron.Graph.Core-v0.0.2'
+        required: true
+        type: string
 
 env:
   DOTNET_NOLOGO: true
@@ -22,6 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # On a manual run, check out the tag that was named rather than the default branch.
+          ref: ${{ inputs.tag || github.ref }}
           # MinVer must see the tag history to resolve this package's version.
           fetch-depth: 0
 
@@ -30,8 +40,13 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Identify the package from the tag
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          if ! printf '%s' "$TAG" | grep -Eq '^Cyclotron\.[A-Za-z0-9.]+-v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::'$TAG' is not a release tag. Expected <PackageId>-v<Version>, e.g. Cyclotron.Graph.Core-v0.0.2"
+            exit 1
+          fi
           echo "PACKAGE_ID=${TAG%-v*}" >> "$GITHUB_ENV"
           echo "VERSION=${TAG##*-v}" >> "$GITHUB_ENV"
           echo "Releasing ${TAG%-v*} ${TAG##*-v}"
