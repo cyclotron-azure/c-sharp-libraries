@@ -1,0 +1,37 @@
+{
+  "kit": "ai-orchestration",
+  "kitVersion": "0.23.0",
+  "installedAt": "2026-08-28",
+  "harnesses": [
+    "claude-code"
+  ],
+  "options": {
+    "research": false,
+    "loop": false,
+    "greenfield": false,
+    "forge": "github"
+  },
+  "files": {
+    ".claude/ORCHESTRATION.md": "68d0f3f6fea5deb5030d63cb6abb056ac9efaa73a7988965c3c9236f04d842fa",
+    ".claude/agents/diagnostician.md": "a94b3275adf2003e136c483b3a91e86979676e13b5e3346bc97065871f193e9a",
+    ".claude/agents/evaluator.md": "b56681764994556150e0cb3e76273696be0b915c69565e9aeeaa8a4734e402e5",
+    ".claude/agents/implementer.md": "758d7e09603d27843486760cab0dea6aa202ff22bc277abbb4a7a90b54beccc6",
+    ".claude/agents/qa-evaluator.md": "ff1d2f5a259d48adcc73f8b7ad7e222c482f6052626138cb24127812083e8052",
+    ".claude/agents/terminal.md": "1e07f189cbea1e1997aafbb26d6b1e10ea657aaa76551f425c08ff9a4b140a4d",
+    ".claude/agents/test-writer.md": "4355b2e63efc9ebeb1da8e32cf2874fd54a01f488d61dc627f64783af1b38e6d",
+    ".claude/settings.json": "a3fb9ca4fc62ecb39c7d8e0b7b88d05fbfd8a3c046df8e344ff82e3f8c381ae4",
+    ".claude/skills/align-docs/SKILL.md": "3a8f63e8ca1ca4160f2027ced4db40761b1bede64f89475cc570ccb23acbfc9d",
+    ".claude/skills/feature/SKILL.md": "aa4bb61439ca2c77e6f9255d80519d3ed93ab91daa4d9a87fbe87837d7c9123e",
+    ".claude/skills/feature/reference/continuation-ladder.md": "dce52e124e84a09e01e444ebd1c11680832f6b1d6f359dee5ab6da00807d9f3f",
+    ".claude/skills/feature/templates/goal.md": "e8f4f91646a95f1c55a40053703937dacec0ea9d9a4ee2c166a232b3a139f3d3",
+    ".claude/skills/feature/templates/task.md": "e1f72becd97dc635a5fa9e06c01b092b6f0ed664b4097db4552c999908e639ff",
+    ".claude/skills/goal-criteria/SKILL.md": "cbd79c041a711a460a1b806e308bcfd6bdd5b7dae2e3ede21bae89ca48e9f1aa",
+    ".claude/skills/qa-criteria/SKILL.md": "aa450dbfcf06e6157d1a67f04f09a31668d31b33ef57ae706b07fb681bf8454c",
+    ".claude/skills/setup-models.map.md": "b2ea18e65a54c0856efab987a39e82569256d226b9d1cfea5fa15ce4dcd3763a",
+    ".claude/skills/ship-pr/SKILL.md": "4a9e8f0aac84128113e979e6f2d14b74c8fba4aef6907298ed16db0abccc8cd2",
+    ".claude/skills/task-criteria/SKILL.md": "5ed25b05671995dfa0ccbc282d348ba4cdf00855c4c465cce3c37b10b0271b2a",
+    ".claude/skills/test-ladder/SKILL.md": "359aa28ca645b86208501434557eb03cc6890342aa99154b3fb449f27a19b79a",
+    "CLAUDE.md": "fd0b1853b9b1f2f5f9d8a33594ae0aeb632e8482955fd40365e1cbdb741df53c"
+  },
+  "seedFiles": []
+}

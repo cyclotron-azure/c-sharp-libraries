@@ -113,6 +113,29 @@ assemblies rather than shipped as `.snupkg`, because GitHub Packages has no symb
 SourceLink that still gives consumers full source stepping, with nothing extra to host. Builds
 under CI are deterministic.
 
+### Credentials for local packing
+
+Building and testing needs no credentials: source mapping confines the GitHub feed to
+`Cyclotron.*`, and sibling libraries build from source, so nothing is ever requested from it. Only
+packing is different — it restores the published sibling and therefore needs a token with
+`read:packages`.
+
+Supply it through the environment, never through the file:
+
+```sh
+# bash
+export NuGetPackageSourceCredentials_github="Username=<your-github-user>;Password=<pat>"
+```
+
+```powershell
+# PowerShell
+$env:NuGetPackageSourceCredentials_github = "Username=<your-github-user>;Password=<pat>"
+```
+
+Do **not** use `dotnet nuget update source github --store-password-in-clear-text` locally: this
+repo's `nuget.config` is tracked, so that writes your PAT into a file git is watching. CI can use
+it safely only because the runner's copy is thrown away.
+
 ## Continuous integration
 
 Two workflows, neither of them per-package. Adding a library never means adding a workflow.
