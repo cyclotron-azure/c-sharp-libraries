@@ -7,7 +7,7 @@
 
   <PropertyGroup Label="NuGet packaging">
     <PackageId>Cyclotron.Graph.Core</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.0.1</Version>
     <IsPackable>true</IsPackable>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>microsoft-graph;graph-api;subscriptions;webhooks;authentication</PackageTags>
