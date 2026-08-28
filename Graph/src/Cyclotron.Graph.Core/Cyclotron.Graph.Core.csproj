@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Cyclotron.Graph.Core</RootNamespace>
+    <AssemblyName>Cyclotron.Graph.Core</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup Label="NuGet packaging">
+    <PackageId>Cyclotron.Graph.Core</PackageId>
+    <Version>0.1.0</Version>
+    <IsPackable>true</IsPackable>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>microsoft-graph;graph-api;subscriptions;webhooks;authentication</PackageTags>
+    <Description>Shared Microsoft Graph plumbing for the Cyclotron.Graph.* family — authentication, subscriptions, and change-notification handling. You normally install a workload package such as Cyclotron.Graph.Mail, which depends on this one. Install Cyclotron.Graph.Core directly only when building against Graph subscriptions/notifications without a workload package.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,58 @@
+@baseUrl = http://localhost:5280
+@mailboxAddress = user@contoso.com
+@mailboxId = REPLACE-WITH-RESOLVED-GRAPH-USER-ID
+@messageId = REPLACE-WITH-GRAPH-MESSAGE-ID
+@subscriptionId = REPLACE-WITH-GRAPH-SUBSCRIPTION-ID
+
+###
+# ─── IGraphMailClient ────────────────────────────────────────────────────────
+# Every request here calls live Microsoft Graph. Supply credentials first (see README.md).
+###
+
+### IGraphMailClient.ResolveMailboxIdAsync
+### Expect 200 with { "mailboxId": "<guid-like id>" }, or { "mailboxId": null } if the user does
+### not exist. Copy the returned id into @mailboxId above — every request below needs it.
+GET {{baseUrl}}/graph/mailboxes/{{mailboxAddress}}/id
+
+###
+
+### IGraphMailClient.GetWellKnownFolderIdsAsync
+### Expect 200 with inboxFolderId and sentItemsFolderId populated. If Graph 404s one folder, that
+### id comes back null while the other still resolves.
+GET {{baseUrl}}/graph/mailboxes/{{mailboxId}}/folders
+
+###
+
+### IGraphMailClient.GetMessageAsync (full, 3-arg)
+### Expect 200 with the mapped message: mailboxId stamped, body/uniqueBody trimmed, and inReplyTo
+### plus references recovered from the MAPI extended properties (references most-recent-first).
+### Returns 200 with a null body if the message id does not exist.
+GET {{baseUrl}}/graph/mailboxes/{{mailboxId}}/messages/{{messageId}}
+
+###
+
+### IGraphMailClient.GetMessageAsync<T> (generic, with selectFields)
+### Deserializes into JsonElement, so any field set works. Expect 200 echoing exactly the fields
+### requested and nothing else. Sending fields= (empty) makes the library throw ArgumentException,
+### which the harness surfaces as a 500.
+GET {{baseUrl}}/graph/mailboxes/{{mailboxId}}/messages/{{messageId}}/select?fields=id,subject,receivedDateTime
+
+###
+
+### IGraphMailClient.UpdateMessageCategoriesAsync
+### Expect 204 No Content, and the new categories visible on the message in Outlook. The supplied
+### array REPLACES the existing categories; a Graph failure surfaces as a 500.
+PATCH {{baseUrl}}/graph/mailboxes/{{mailboxId}}/messages/{{messageId}}/categories
+Content-Type: application/json
+
+["AI - LEGAL", "AI - URGENT"]
+
+###
+
+### IGraphMailClient.GetMessagesDeltaAsync
+### First call (no deltaLink): expect 200 with messages received since floor, plus a deltaLink to
+### persist. Pass that deltaLink back on the next call to get only what changed since. An expired
+### token makes the library restart from floor (410 handling) rather than replay all history.
+GET {{baseUrl}}/graph/mailboxes/{{mailboxId}}/delta?floor=2026-01-01T00:00:00Z
+
+###

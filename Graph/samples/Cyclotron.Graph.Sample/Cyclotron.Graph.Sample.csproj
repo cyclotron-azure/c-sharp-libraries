@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>Cyclotron.Graph.Sample</RootNamespace>
+    <AssemblyName>Cyclotron.Graph.Sample</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <UserSecretsId>cyclotron-graph-sample</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Cyclotron.Graph.Mail\Cyclotron.Graph.Mail.csproj" />
+  </ItemGroup>
+
+</Project>

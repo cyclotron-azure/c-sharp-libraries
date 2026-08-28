@@ -1,0 +1,16 @@
+# Normalize every text file to LF in the repository and on checkout, so a contributor with
+# core.autocrlf=true (the Windows git default) cannot reintroduce CRLF. This matches
+# .editorconfig's `end_of_line = lf`; the two must stay in agreement.
+* text=auto eol=lf
+
+# Explicitly binary — never normalize, never diff as text.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.nupkg binary
+*.snk binary
+*.dll binary
+*.exe binary

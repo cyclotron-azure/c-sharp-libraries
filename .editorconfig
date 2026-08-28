@@ -1,0 +1,198 @@
+# See https://editorconfig.org for the specification.
+root = true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Universal defaults
+# ─────────────────────────────────────────────────────────────────────────────
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C# — formatting, style, and naming
+# ─────────────────────────────────────────────────────────────────────────────
+[*.cs]
+indent_size = 4
+
+# ── Newlines ──────────────────────────────────────────────────────────────────
+# Allman style: opening brace on its own line for all constructs.
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+# ── Indentation ───────────────────────────────────────────────────────────────
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+
+# ── Spacing ───────────────────────────────────────────────────────────────────
+csharp_space_after_cast = false
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_around_binary_operators = before_and_after
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_parentheses = false
+
+# ── Braces ────────────────────────────────────────────────────────────────────
+# Always require braces, even for single-statement blocks.
+csharp_prefer_braces = true:warning
+
+# ── var preferences ───────────────────────────────────────────────────────────
+# Use var only when the type is apparent from the right-hand side.
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# ── Namespace style ───────────────────────────────────────────────────────────
+# Prefer file-scoped namespaces: `namespace Foo.Bar;`
+csharp_style_namespace_declarations = file_scoped:warning
+
+# ── using declarations ────────────────────────────────────────────────────────
+# Prefer `using var x = ...` over `using (var x = ...) { }`.
+csharp_prefer_simple_using_statement = true:suggestion
+
+# ── Expression-bodied members ─────────────────────────────────────────────────
+# Prefer block bodies for methods and constructors to keep code explicit.
+csharp_style_expression_bodied_methods = false:suggestion
+csharp_style_expression_bodied_constructors = false:suggestion
+csharp_style_expression_bodied_operators = false:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+csharp_style_expression_bodied_indexers = when_on_single_line:suggestion
+csharp_style_expression_bodied_accessors = when_on_single_line:suggestion
+
+# ── Pattern matching ──────────────────────────────────────────────────────────
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+
+# ── Null handling ─────────────────────────────────────────────────────────────
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
+
+# ── Using directives ──────────────────────────────────────────────────────────
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# ── Object and collection initializers ───────────────────────────────────────
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+
+# ── Misc style ────────────────────────────────────────────────────────────────
+dotnet_style_prefer_auto_properties = true:suggestion
+dotnet_style_prefer_compound_assignment = true:suggestion
+dotnet_style_prefer_simplified_boolean_expressions = true:suggestion
+csharp_style_unused_value_assignment_preference = discard_variable:suggestion
+csharp_style_unused_value_expression_statement_preference = discard_variable:suggestion
+csharp_prefer_static_local_function = true:suggestion
+
+# ── Naming rules ─────────────────────────────────────────────────────────────
+#
+# Priority order matters: more specific rules should appear first.
+#
+# 1. Interfaces: IPascalCase
+dotnet_naming_rule.interfaces_must_begin_with_i.symbols  = interface_symbols
+dotnet_naming_rule.interfaces_must_begin_with_i.style    = i_prefix_pascal_case
+dotnet_naming_rule.interfaces_must_begin_with_i.severity = warning
+
+dotnet_naming_symbols.interface_symbols.applicable_kinds          = interface
+dotnet_naming_symbols.interface_symbols.applicable_accessibilities = *
+
+dotnet_naming_style.i_prefix_pascal_case.required_prefix = I
+dotnet_naming_style.i_prefix_pascal_case.capitalization   = pascal_case
+
+# 2. Async methods must end with "Async"
+dotnet_naming_rule.async_methods_end_in_async.symbols  = async_method_symbols
+dotnet_naming_rule.async_methods_end_in_async.style    = async_suffix
+dotnet_naming_rule.async_methods_end_in_async.severity = warning
+
+dotnet_naming_symbols.async_method_symbols.applicable_kinds          = method
+dotnet_naming_symbols.async_method_symbols.applicable_accessibilities = *
+dotnet_naming_symbols.async_method_symbols.required_modifiers         = async
+
+dotnet_naming_style.async_suffix.required_suffix = Async
+dotnet_naming_style.async_suffix.capitalization   = pascal_case
+
+# Exception for test files (see rule 2 above)
+[**/*Tests.cs]
+dotnet_naming_rule.async_methods_end_in_async.severity = none
+
+[*.cs]
+# 3. Constants: PascalCase
+dotnet_naming_rule.constants_pascal_case.symbols  = constant_symbols
+dotnet_naming_rule.constants_pascal_case.style    = pascal_case_style
+dotnet_naming_rule.constants_pascal_case.severity = warning
+
+dotnet_naming_symbols.constant_symbols.applicable_kinds     = field, local
+dotnet_naming_symbols.constant_symbols.required_modifiers   = const
+
+# 4. Public / internal / protected members: PascalCase
+dotnet_naming_rule.public_members_pascal_case.symbols  = public_member_symbols
+dotnet_naming_rule.public_members_pascal_case.style    = pascal_case_style
+dotnet_naming_rule.public_members_pascal_case.severity = warning
+
+dotnet_naming_symbols.public_member_symbols.applicable_kinds          = class, struct, enum, delegate, property, method, event
+dotnet_naming_symbols.public_member_symbols.applicable_accessibilities = public, protected, internal, protected_internal, private_protected
+
+# 5. Private / private-protected fields: _camelCase
+dotnet_naming_rule.private_fields_underscore_camel.symbols  = private_field_symbols
+dotnet_naming_rule.private_fields_underscore_camel.style    = underscore_camel_case
+dotnet_naming_rule.private_fields_underscore_camel.severity = suggestion
+
+dotnet_naming_symbols.private_field_symbols.applicable_kinds          = field
+dotnet_naming_symbols.private_field_symbols.applicable_accessibilities = private, private_protected
+
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+dotnet_naming_style.underscore_camel_case.capitalization   = camel_case
+
+# 6. Local variables and parameters: camelCase
+dotnet_naming_rule.locals_and_params_camel_case.symbols  = local_and_param_symbols
+dotnet_naming_rule.locals_and_params_camel_case.style    = camel_case_style
+dotnet_naming_rule.locals_and_params_camel_case.severity = suggestion
+
+dotnet_naming_symbols.local_and_param_symbols.applicable_kinds          = local, parameter
+dotnet_naming_symbols.local_and_param_symbols.applicable_accessibilities = *
+
+# Shared styles
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+dotnet_naming_style.camel_case_style.capitalization  = camel_case
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TypeScript and JavaScript
+# ─────────────────────────────────────────────────────────────────────────────
+[*.{ts,tsx,js,jsx,mjs,cjs}]
+indent_size = 2
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JSON
+# ─────────────────────────────────────────────────────────────────────────────
+[*.json]
+indent_size = 2
+
+# ─────────────────────────────────────────────────────────────────────────────
+# XML and MSBuild project files
+# ─────────────────────────────────────────────────────────────────────────────
+[*.{xml,csproj,props,targets,resx,config,runsettings}]
+indent_size = 2
+
+# ─────────────────────────────────────────────────────────────────────────────
+# YAML
+# ─────────────────────────────────────────────────────────────────────────────
+[*.{yml,yaml}]
+indent_size = 2
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Markdown — preserve trailing spaces (used for line breaks)
+# ─────────────────────────────────────────────────────────────────────────────
+[*.md]
+trim_trailing_whitespace = false

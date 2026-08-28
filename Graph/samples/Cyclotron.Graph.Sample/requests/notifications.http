@@ -1,0 +1,140 @@
+@baseUrl = http://localhost:5280
+@mailboxId = REPLACE-WITH-RESOLVED-GRAPH-USER-ID
+@messageId = REPLACE-WITH-GRAPH-MESSAGE-ID
+@subscriptionId = sub-local-001
+# Must equal the configured Graph:Subscription:ClientStateSecret, or every notification below is
+# rejected as invalid. Set both to the same throwaway value for local runs.
+@clientState = REPLACE-WITH-CONFIGURED-CLIENT-STATE-SECRET
+
+###
+# ─── IGraphNotificationParser ────────────────────────────────────────────────
+# These endpoints need NO Graph subscription and NO public tunnel — they read the raw body and
+# hand it straight to the parser, so they are drivable entirely offline. Outcomes are observed in
+# the application log, since a skipped notification is a success (200-class), not an error.
+###
+
+### IGraphNotificationParser.DispatchMessageNotificationsAsync — valid "created" notification
+### Expect 202 Accepted, and one "Change notification: ... changeType=Created" line in the log
+### from LoggingNotificationSinks.OnResourceChangedAsync.
+POST {{baseUrl}}/notifications/messages
+Content-Type: application/json
+
+{
+  "value": [
+    {
+      "subscriptionId": "{{subscriptionId}}",
+      "changeType": "created",
+      "clientState": "{{clientState}}",
+      "resource": "users/{{mailboxId}}/messages/{{messageId}}",
+      "resourceData": { "id": "{{messageId}}" }
+    }
+  ]
+}
+
+###
+
+### IGraphNotificationParser.DispatchMessageNotificationsAsync — valid "updated" notification
+### Expect 202 Accepted and one logged dispatch with changeType=Updated. Both created and updated
+### are in the default configured ChangeTypes mask, so both reach the sink.
+POST {{baseUrl}}/notifications/messages
+Content-Type: application/json
+
+{
+  "value": [
+    {
+      "subscriptionId": "{{subscriptionId}}",
+      "changeType": "updated",
+      "clientState": "{{clientState}}",
+      "resource": "users/{{mailboxId}}/messages/{{messageId}}",
+      "resourceData": { "id": "{{messageId}}" }
+    }
+  ]
+}
+
+###
+
+### IGraphNotificationParser.DispatchMessageNotificationsAsync — WRONG clientState
+### Expect 202 Accepted but NO sink dispatch: the log shows
+### "Notification rejected: invalid clientState". A skipped notification is not a failure — the
+### library returns normally so a queue trigger does not retry a payload that can never succeed.
+POST {{baseUrl}}/notifications/messages
+Content-Type: application/json
+
+{
+  "value": [
+    {
+      "subscriptionId": "{{subscriptionId}}",
+      "changeType": "created",
+      "clientState": "definitely-not-the-configured-secret",
+      "resource": "users/{{mailboxId}}/messages/{{messageId}}",
+      "resourceData": { "id": "{{messageId}}" }
+    }
+  ]
+}
+
+###
+
+### IGraphNotificationParser.DispatchMessageNotificationsAsync — MALFORMED JSON
+### Expect 500 with a ProblemDetails body. This is the documented throw: a malformed payload is
+### unrecoverable and never succeeds on retry, so the library rethrows the JsonException to let a
+### queue trigger abandon and eventually dead-letter the message.
+POST {{baseUrl}}/notifications/messages
+Content-Type: application/json
+
+{ "value": [ { "subscriptionId": "broken",
+
+###
+
+### IGraphNotificationParser.DispatchLifecycleNotificationsAsync — reauthorizationRequired
+### Expect 202 Accepted and one "Lifecycle: reauthorizationRequired" log line from
+### LoggingNotificationSinks.OnReauthorizationRequiredAsync.
+POST {{baseUrl}}/notifications/lifecycle
+Content-Type: application/json
+
+{
+  "value": [
+    {
+      "subscriptionId": "{{subscriptionId}}",
+      "clientState": "{{clientState}}",
+      "lifecycleEvent": "reauthorizationRequired"
+    }
+  ]
+}
+
+###
+
+### IGraphNotificationParser.DispatchLifecycleNotificationsAsync — subscriptionRemoved
+### Expect 202 Accepted and one "Lifecycle: subscriptionRemoved" log line from
+### LoggingNotificationSinks.OnSubscriptionRemovedAsync.
+POST {{baseUrl}}/notifications/lifecycle
+Content-Type: application/json
+
+{
+  "value": [
+    {
+      "subscriptionId": "{{subscriptionId}}",
+      "clientState": "{{clientState}}",
+      "lifecycleEvent": "subscriptionRemoved"
+    }
+  ]
+}
+
+###
+
+### IGraphNotificationParser.DispatchLifecycleNotificationsAsync — missed
+### Expect 202 Accepted and one "Lifecycle: missed" log line from
+### LoggingNotificationSinks.OnMissedAsync.
+POST {{baseUrl}}/notifications/lifecycle
+Content-Type: application/json
+
+{
+  "value": [
+    {
+      "subscriptionId": "{{subscriptionId}}",
+      "clientState": "{{clientState}}",
+      "lifecycleEvent": "missed"
+    }
+  ]
+}
+
+###
