@@ -101,18 +101,35 @@ consumer resolves that version by default but may be moved higher by a direct re
 ## Packing
 
 ```sh
-dotnet pack CyclotronAzure.Libraries.sln -c Release -o artifacts -p:UseProjectReferences=false
+dotnet pack Graph/src/Cyclotron.Graph.Core/Cyclotron.Graph.Core.csproj   -c Release -o artifacts -p:UseProjectReferences=false
 ```
 
 The flag is required: without it the pack guard stops you. Every version pinned in
 `Directory.Packages.props` must already exist on the feed for the restore to succeed, so **the
 first release of a new package must precede the first release of anything that depends on it**.
 
-Only `src/` projects pack; tests and samples set `IsPackable=false`, which makes solution-level
-`dotnet pack` log a benign "packaging has been disabled" warning for the sample.
+Only `src/` projects pack; tests and samples set `IsPackable=false`. PDBs are embedded in the
+assemblies rather than shipped as `.snupkg`, because GitHub Packages has no symbol server — with
+SourceLink that still gives consumers full source stepping, with nothing extra to host. Builds
+under CI are deterministic.
 
-Packages are source-linked and built deterministically under CI, so consumers can step into library
-code from their own debugger.
+## Continuous integration
+
+Two workflows, neither of them per-package. Adding a library never means adding a workflow.
+
+| Workflow | Trigger | Does |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | pull requests, pushes to `main` | builds and tests the whole solution on `ubuntu-latest` and `windows-latest`. Publishes nothing. |
+| [`release.yml`](.github/workflows/release.yml) | tag `Cyclotron.*-v*` | derives the package from the tag, builds and tests the repo, then packs and pushes **only that package** |
+
+Build and test deliberately run against the solution rather than one package: the value of a
+monorepo is that a change to `Cyclotron.Graph.Core` is checked against `Cyclotron.Graph.Mail`'s
+tests in the same run, which a per-package pipeline cannot do. The OS matrix is not ceremony —
+`Uri`, path, and culture handling have all differed between Windows and Linux here, and a
+Linux-only pipeline lets those reach `main` from a Windows dev machine.
+
+`ci.yml` needs no feed credentials at all: sibling libraries build from source and source mapping
+means no `Cyclotron.*` package is ever requested, so it works on pull requests from forks.
 
 ## Publishing
 
@@ -122,19 +139,19 @@ Packages are hosted on **GitHub Packages** under the `cyclotron-azure` organizat
 https://nuget.pkg.github.com/cyclotron-azure/index.json
 ```
 
-`.github/workflows/publish.yml` handles it — pull requests build and test only, commits on `main`
-publish prereleases, and a package's tag publishes its stable version. It authenticates with the
+Releases are tag-driven, and only the tagged package is published — nothing else in the repo is
+republished, and no prereleases are pushed from `main`. `release.yml` authenticates with the
 built-in `GITHUB_TOKEN`, for restore as well as push; no PAT or repository secret is needed.
-
-To release a single package, tag it and push the tag:
 
 ```sh
 git tag Cyclotron.Graph.Core-v0.0.2
 git push origin Cyclotron.Graph.Core-v0.0.2
 ```
 
-Packages other than the tagged one still build in that run and push a prerelease, which is harmless.
-The tag must point at a commit that already contains the workflow, so push your commits first.
+The workflow parses the package id and version straight out of the tag, and fails before pushing
+if MinVer resolves a version that disagrees with it. The tag must point at a commit that already
+contains the workflow, so push your commits first.
+
 ## Consuming these packages
 
 GitHub Packages requires authentication for NuGet **even for public packages**, so every

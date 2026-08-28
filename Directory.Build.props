@@ -20,8 +20,10 @@
   <PropertyGroup Label="Source-linked, debuggable packages">
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- GitHub Packages has no symbol server, so a .snupkg published there would be unreachable
+         (and dotnet nuget push tries to send one alongside every package). Embedding the PDB in
+         the assembly gives consumers full source stepping with nothing extra to host. -->
+    <DebugType>embedded</DebugType>
     <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 

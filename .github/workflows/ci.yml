@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  test:
+    # Windows and Linux disagree about more than line endings — Uri parsing, path handling and
+    # culture rules have all produced green-here/red-there bugs in this repo. Test both.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # MinVer derives each package's version from tag history, which a shallow clone lacks.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # No feed credentials anywhere in this job: sibling libraries build from source
+      # (UseProjectReferences defaults to true), and package source mapping means no Cyclotron.*
+      # package is ever requested. That also lets this run on pull requests from forks.
+      - run: dotnet restore CyclotronAzure.Libraries.sln
+
+      - run: dotnet build CyclotronAzure.Libraries.sln -c Release --no-restore
+
+      - run: dotnet test CyclotronAzure.Libraries.sln -c Release --no-build --verbosity normal

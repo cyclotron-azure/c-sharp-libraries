@@ -67,12 +67,12 @@ internal sealed class GraphCoreOptionsValidator : IValidateOptions<GraphCoreOpti
 
         if (!IsAbsoluteUri(subscription.NotificationUrl))
         {
-            failures.Add("GraphCoreOptions.Subscription.NotificationUrl must be an absolute URI.");
+            failures.Add("GraphCoreOptions.Subscription.NotificationUrl must be an absolute http(s) URI.");
         }
 
         if (!IsAbsoluteUri(subscription.LifecycleNotificationUrl))
         {
-            failures.Add("GraphCoreOptions.Subscription.LifecycleNotificationUrl must be an absolute URI.");
+            failures.Add("GraphCoreOptions.Subscription.LifecycleNotificationUrl must be an absolute http(s) URI.");
         }
 
         if (string.IsNullOrWhiteSpace(subscription.ResourceTemplate) ||
@@ -101,12 +101,12 @@ internal sealed class GraphCoreOptionsValidator : IValidateOptions<GraphCoreOpti
     {
         if (!IsAbsoluteUri(options.BaseAddress))
         {
-            failures.Add("GraphCoreOptions.BaseAddress must be an absolute URI.");
+            failures.Add("GraphCoreOptions.BaseAddress must be an absolute http(s) URI.");
         }
 
         if (!IsAbsoluteUri(options.LoginBaseAddress))
         {
-            failures.Add("GraphCoreOptions.LoginBaseAddress must be an absolute URI.");
+            failures.Add("GraphCoreOptions.LoginBaseAddress must be an absolute http(s) URI.");
         }
 
         if (string.IsNullOrWhiteSpace(options.ApiVersion))
@@ -115,6 +115,13 @@ internal sealed class GraphCoreOptionsValidator : IValidateOptions<GraphCoreOpti
         }
     }
 
+    // The scheme check is load-bearing, not decoration: on non-Windows platforms Uri.TryCreate
+    // accepts a rooted path such as "/relative/notifications" as an absolute file:// URI, so
+    // UriKind.Absolute alone validates differently on Linux than on Windows. Every option
+    // validated here is an HTTP endpoint, so requiring an http(s) scheme is both the fix and the
+    // more accurate rule.
     private static bool IsAbsoluteUri(string? value) =>
-        !string.IsNullOrWhiteSpace(value) && Uri.TryCreate(value, UriKind.Absolute, out _);
+        !string.IsNullOrWhiteSpace(value)
+        && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 }

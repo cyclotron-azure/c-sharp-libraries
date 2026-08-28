@@ -87,11 +87,17 @@ public class GraphCoreOptionsValidatorTests
         Assert.Contains(result.Failures!, f => f.Contains("GraphCoreOptions.Subscription.ResourceTemplate", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void Validate_NonAbsoluteNotificationUrl_FailsNamingThatOptionPath()
+    [Theory]
+    // A rooted path is what Windows and Linux disagree about: Uri.TryCreate(UriKind.Absolute)
+    // rejects it on Windows but accepts it as file:///relative/notifications on Linux. The
+    // explicit file:// case pins the same rule without depending on the host platform.
+    [InlineData("/relative/notifications")]
+    [InlineData("file:///relative/notifications")]
+    [InlineData("relative/notifications")]
+    public void Validate_NonHttpNotificationUrl_FailsNamingThatOptionPath(string notificationUrl)
     {
         var options = ValidOptions();
-        options.Subscription.NotificationUrl = "/relative/notifications";
+        options.Subscription.NotificationUrl = notificationUrl;
 
         var result = Validate(options);
 
