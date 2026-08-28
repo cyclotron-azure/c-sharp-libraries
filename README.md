@@ -144,6 +144,8 @@ consuming repo:
 ```xml
 <configuration>
   <packageSources>
+    <clear />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
     <add key="cyclotron" value="https://nuget.pkg.github.com/cyclotron-azure/index.json" />
   </packageSources>
   <packageSourceCredentials>
@@ -152,8 +154,21 @@ consuming repo:
       <add key="ClearTextPassword" value="%GITHUB_TOKEN%" />
     </cyclotron>
   </packageSourceCredentials>
+  <packageSourceMapping>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="cyclotron">
+      <package pattern="Cyclotron.*" />
+    </packageSource>
+  </packageSourceMapping>
 </configuration>
 ```
+
+The `packageSourceMapping` block is mandatory if the consuming repo uses central package
+management — NuGet fails restore with `NU1507` when more than one source is defined without it —
+and is worth keeping either way, since it means a `Cyclotron.*` package can only ever resolve from
+our feed and never from a nuget.org name squatter.
 
 Keep the token in the environment, not in a committed `nuget.config`.
 
@@ -164,4 +179,7 @@ Keep the token in the environment, not in a committed `nuget.config`.
 - Shared build properties (`Directory.Build.props`) — target framework, nullable, warnings-as-errors,
   and package metadata are set once for every project in the repo. Versioning is per-package: each
   packable csproj sets its own `MinVerTagPrefix`.
+- Package sources (`nuget.config`) — two sources with package source mapping: `Cyclotron.*`
+  resolves only from GitHub Packages, everything else only from nuget.org. The mapping is required
+  by central package management and never contacted by a normal local build.
 - `.editorconfig` is shared with Cyclotron's other repositories for consistent formatting.
