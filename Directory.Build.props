@@ -12,6 +12,45 @@
   <PropertyGroup Label="Package metadata">
     <Authors>Cyclotron</Authors>
     <Company>Cyclotron</Company>
+    <RepositoryUrl>https://github.com/cyclotron-azure/c-sharp-libraries</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/cyclotron-azure/c-sharp-libraries</PackageProjectUrl>
   </PropertyGroup>
+
+  <PropertyGroup Label="Source-linked, debuggable packages">
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Versioning">
+    <!-- Each package versions independently off its own tag prefix, set in its csproj
+         (e.g. Cyclotron.Graph.Core-v0.0.2). This value is only the fallback for projects
+         that are never packed — tests and samples. Never set Version by hand. -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Intra-repo references">
+    <!-- Default on for the dev loop: a library referencing a sibling library compiles against
+         its sources, so a change to one is validated against the other without publishing.
+         CI packs with -p:UseProjectReferences=false so shipped packages depend on the
+         published, pinned sibling version instead. -->
+    <UseProjectReferences Condition="'$(UseProjectReferences)' == ''">true</UseProjectReferences>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
+  <!-- Packing with project references would bake the sibling's locally-computed version into the
+       nuspec, which is what independent versioning must avoid (it produces dependencies on
+       prereleases that were never published — NU5104). Fail loudly instead of shipping that. -->
+  <Target Name="GuardAgainstPackingProjectReferences"
+          BeforeTargets="GenerateNuspec"
+          Condition="'$(IsPackable)' == 'true' and '$(UseProjectReferences)' == 'true' and '@(ProjectReference)' != ''">
+    <Error Text="Cannot pack $(PackageId) with UseProjectReferences=true — the sibling dependency version would come from this build instead of the published package. Pack with -p:UseProjectReferences=false." />
+  </Target>
 
 </Project>

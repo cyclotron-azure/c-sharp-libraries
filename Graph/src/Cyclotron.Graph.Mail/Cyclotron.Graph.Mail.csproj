@@ -7,15 +7,23 @@
 
   <PropertyGroup Label="NuGet packaging">
     <PackageId>Cyclotron.Graph.Mail</PackageId>
-    <Version>0.0.1</Version>
     <IsPackable>true</IsPackable>
+    <MinVerTagPrefix>Cyclotron.Graph.Mail-v</MinVerTagPrefix>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>microsoft-graph;graph-api;mail;messages;delta</PackageTags>
     <Description>Microsoft Graph mail client for the Cyclotron.Graph.* family — messages, well-known folders, and delta queries. Install this package directly; it brings in Cyclotron.Graph.Core transitively, so a mail consumer's project only needs to reference Cyclotron.Graph.Mail.</Description>
   </PropertyGroup>
 
-  <ItemGroup>
+  <!-- Mail and Core version independently, so the shipped package must depend on a *published*
+       Core, not on whatever version Core happens to compute in this build. Local builds default
+       to the project reference; packing uses the package reference pinned in
+       Directory.Packages.props. See "Versioning" in the repo README. -->
+  <ItemGroup Condition="'$(UseProjectReferences)' == 'true'">
     <ProjectReference Include="..\Cyclotron.Graph.Core\Cyclotron.Graph.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseProjectReferences)' != 'true'">
+    <PackageReference Include="Cyclotron.Graph.Core" />
   </ItemGroup>
 
   <ItemGroup>

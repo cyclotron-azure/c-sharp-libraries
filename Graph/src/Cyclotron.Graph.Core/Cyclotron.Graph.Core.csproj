@@ -7,8 +7,8 @@
 
   <PropertyGroup Label="NuGet packaging">
     <PackageId>Cyclotron.Graph.Core</PackageId>
-    <Version>0.0.1</Version>
     <IsPackable>true</IsPackable>
+    <MinVerTagPrefix>Cyclotron.Graph.Core-v</MinVerTagPrefix>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>microsoft-graph;graph-api;subscriptions;webhooks;authentication</PackageTags>
     <Description>Shared Microsoft Graph plumbing for the Cyclotron.Graph.* family — authentication, subscriptions, and change-notification handling. You normally install a workload package such as Cyclotron.Graph.Mail, which depends on this one. Install Cyclotron.Graph.Core directly only when building against Graph subscriptions/notifications without a workload package.</Description>

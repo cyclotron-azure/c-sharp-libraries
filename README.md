@@ -14,7 +14,7 @@ lineage but are published as separate packages.
 
 Every family follows the same shape:
 
-```
+```text
 <Family>/
   src/
     <PackageId>/            — one folder per package, csproj name matches PackageId
@@ -32,16 +32,136 @@ tests (once added) at `Graph/tests/Cyclotron.Graph.Core.Tests/`, and any sample 
 
 All projects are collected into `CyclotronAzure.Libraries.sln` at the repo root.
 
-## Build
+## Build and test
 
-```
+```sh
 dotnet build CyclotronAzure.Libraries.sln
+dotnet test CyclotronAzure.Libraries.sln
 ```
+
+By default a library in this repo compiles against a sibling library's **sources**, so a change to
+`Cyclotron.Graph.Core` is validated against `Cyclotron.Graph.Mail`'s tests before either is
+released. Packing deliberately does not work this way — see [Versioning](#versioning).
+
+## Versioning
+
+**Every package versions independently.** A package's version comes from git tags carrying its own
+prefix, resolved by [MinVer](https://github.com/adamralph/MinVer); the prefix is set in each
+package's csproj. No csproj carries a `<Version>` element, and none should.
+
+| Package | Tag prefix | Example release tag |
+|---|---|---|
+| `Cyclotron.Graph.Core` | `Cyclotron.Graph.Core-v` | `Cyclotron.Graph.Core-v0.0.2` |
+| `Cyclotron.Graph.Mail` | `Cyclotron.Graph.Mail-v` | `Cyclotron.Graph.Mail-v0.3.0` |
+
+Given a package's own prefix, MinVer resolves a version from where the commit sits relative to that
+package's tags:
+
+| Where you are | Version you get |
+|---|---|
+| On that package's release tag | the tagged version, e.g. `0.3.0` |
+| Commits after it, untagged | `0.3.1-alpha.0.N` (N = commit height) |
+| No tag with that prefix yet | `0.0.0-alpha.0.N` |
+
+Releasing Core does not touch Mail's version, and vice versa. Bumping Core to `0.1.0` leaves Mail
+at `0.3.0`, still depending on the Core it was built against.
+
+### Why packing uses package references
+
+Independent versions and project references cannot coexist. `<ProjectReference>` makes the shipped
+dependency version *whatever the sibling computes in that same build* — and because MinVer counts
+commit height across the whole repo, a sibling is on a prerelease at any commit that isn't exactly
+its own release tag. Packing stable `Cyclotron.Graph.Mail` 0.3.0 that way emits a dependency on a
+prerelease `Cyclotron.Graph.Core` that was never published, and NuGet rejects it outright:
+
+```text
+error NU5104: A stable release of a package should not have a prerelease dependency.
+```
+
+So the two reference modes are split by purpose, via the `UseProjectReferences` property:
+
+| Mode | Used for | Mail depends on |
+|---|---|---|
+| `UseProjectReferences=true` (default) | local builds, CI build + test | Core's **sources** |
+| `UseProjectReferences=false` | packing and publishing | the **published** Core pinned in `Directory.Packages.props` |
+
+`Directory.Build.props` fails the pack with an explicit error if you try to pack in project-reference
+mode, so a wrong-dependency package cannot be produced by accident.
+
+**Bumping a sibling dependency is therefore a deliberate edit.** When Mail should require a newer
+Core, publish that Core first, then raise its pin:
+
+```xml
+<PackageVersion Include="Cyclotron.Graph.Core" Version="0.1.0" />
+```
+
+The pin is a minimum (`>= 0.1.0`), not an exact match, which is the normal NuGet convention — a
+consumer resolves that version by default but may be moved higher by a direct reference of its own.
+
+## Packing
+
+```sh
+dotnet pack CyclotronAzure.Libraries.sln -c Release -o artifacts -p:UseProjectReferences=false
+```
+
+The flag is required: without it the pack guard stops you. Every version pinned in
+`Directory.Packages.props` must already exist on the feed for the restore to succeed, so **the
+first release of a new package must precede the first release of anything that depends on it**.
+
+Only `src/` projects pack; tests and samples set `IsPackable=false`, which makes solution-level
+`dotnet pack` log a benign "packaging has been disabled" warning for the sample.
+
+Packages are source-linked and built deterministically under CI, so consumers can step into library
+code from their own debugger.
+
+## Publishing
+
+Packages are hosted on **GitHub Packages** under the `cyclotron-azure` organization:
+
+```text
+https://nuget.pkg.github.com/cyclotron-azure/index.json
+```
+
+`.github/workflows/publish.yml` handles it — pull requests build and test only, commits on `main`
+publish prereleases, and a package's tag publishes its stable version. It authenticates with the
+built-in `GITHUB_TOKEN`, for restore as well as push; no PAT or repository secret is needed.
+
+To release a single package, tag it and push the tag:
+
+```sh
+git tag Cyclotron.Graph.Core-v0.0.2
+git push origin Cyclotron.Graph.Core-v0.0.2
+```
+
+Packages other than the tagged one still build in that run and push a prerelease, which is harmless.
+The tag must point at a commit that already contains the workflow, so push your commits first.
+## Consuming these packages
+
+GitHub Packages requires authentication for NuGet **even for public packages**, so every
+consumer — developer machines, CI, container builds — needs a token with `read:packages`. In the
+consuming repo:
+
+```xml
+<configuration>
+  <packageSources>
+    <add key="cyclotron" value="https://nuget.pkg.github.com/cyclotron-azure/index.json" />
+  </packageSources>
+  <packageSourceCredentials>
+    <cyclotron>
+      <add key="Username" value="%GITHUB_USER%" />
+      <add key="ClearTextPassword" value="%GITHUB_TOKEN%" />
+    </cyclotron>
+  </packageSourceCredentials>
+</configuration>
+```
+
+Keep the token in the environment, not in a committed `nuget.config`.
 
 ## Conventions
 
 - Central package management (`Directory.Packages.props`) — `PackageReference` elements never
-  carry a `Version` attribute.
+  carry a `Version` attribute. This includes the pinned versions of sibling packages in this repo.
 - Shared build properties (`Directory.Build.props`) — target framework, nullable, warnings-as-errors,
-  and package metadata are set once for every project in the repo.
+  and package metadata are set once for every project in the repo. Versioning is per-package: each
+  packable csproj sets its own `MinVerTagPrefix`.
 - `.editorconfig` is shared with Cyclotron's other repositories for consistent formatting.

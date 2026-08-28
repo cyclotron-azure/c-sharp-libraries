@@ -4,6 +4,10 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
+  <ItemGroup Label="Cyclotron — published sibling packages, pinned deliberately">
+    <PackageVersion Include="Cyclotron.Graph.Core" Version="0.0.2" />
+  </ItemGroup>
+
   <ItemGroup Label="Azure">
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
   </ItemGroup>
@@ -20,6 +24,10 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
+  </ItemGroup>
+
+  <ItemGroup Label="Build">
+    <PackageVersion Include="MinVer" Version="7.0.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test">
