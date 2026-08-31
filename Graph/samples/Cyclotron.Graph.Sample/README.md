@@ -24,6 +24,19 @@ Plus `Graph:Subscription:ClientStateSecret` — any throwaway string for local r
 match the `@clientState` variable in `requests/notifications.http` or every notification is
 rejected as invalid.
 
+`Graph:Subscription:NotificationBaseUrl` ships empty too. It's only required if you intend to call
+`POST /graph/subscriptions/{resourceId}` against live Graph — the offline
+`requests/notifications.http` flow needs neither it nor a Graph subscription. See
+[Dev tunnels / ngrok](#dev-tunnels--ngrok-local-development) below before setting it: Graph rejects
+a `localhost` URL outright, so a bare `https://localhost:5280` value will fail `SubscribeAsync` with
+a Graph-side validation error, not a local one.
+
+`NotificationPath` (`/notifications/messages`) and `LifecycleNotificationPath`
+(`/notifications/lifecycle`) already ship committed in `appsettings.json` — they're routes, not
+secrets, and match the endpoints mapped in `Program.cs`. Core appends each to
+`NotificationBaseUrl` to compute the full webhook URL, so only the base changes when your tunnel
+does.
+
 ### Supply them via user-secrets, not the committed file
 
 Do not edit `appsettings.json` — it is version-controlled, and a secret typed into it is a secret
@@ -59,6 +72,43 @@ hard-coded as `@baseUrl` in all three `.http` files. Startup fails fast with an
 `OptionsValidationException` listing every misconfigured option at once — that is `ValidateOnStart`
 working as intended, not a crash.
 
+## Dev tunnels / ngrok (local development)
+
+Graph requires a publicly reachable HTTPS URL to create and deliver a subscription — it validates
+`notificationUrl` at `SubscribeAsync` time and rejects `localhost` (and any other non-routable
+host) outright. The sample only listens on `http://localhost:5280` (see `launchSettings.json`), so
+to exercise `/graph/subscriptions/{resourceId}` against live Graph you need to expose that port
+through a tunnel and point `NotificationBaseUrl` at the tunnel's public HTTPS host —
+`NotificationPath` and `LifecycleNotificationPath` stay as committed and get appended automatically.
+
+**Option A — VS Code Dev Tunnels**
+
+1. Open the **Ports** panel in VS Code and forward port `5280`.
+2. Set the tunnel visibility to **Public**.
+3. Copy the generated `https://*.devtunnels.ms` URL.
+4. Set it via user-secrets (never commit a real tunnel URL to `appsettings.json`):
+
+```bash
+dotnet user-secrets set "Graph:Subscription:NotificationBaseUrl" "https://<tunnel-id>.devtunnels.ms"
+```
+
+**Option B — ngrok**
+
+```bash
+ngrok http 5280
+```
+
+Copy the `https://*.ngrok-free.app` forwarding URL and set the same key:
+
+```bash
+dotnet user-secrets set "Graph:Subscription:NotificationBaseUrl" "https://<id>.ngrok-free.app"
+```
+
+> If you change the tunnel URL after a subscription already exists, call `UnsubscribeAsync` and
+> `SubscribeAsync` again — `RenewSubscriptionAsync` won't help, it only extends `expiresAt` and does
+> not change `notificationUrl`; Graph keeps delivering to whatever URL was active when the
+> subscription was created.
+
 ## Driving the `.http` files
 
 Open any file under `requests/` in VS Code (REST Client) or Visual Studio and send requests
@@ -79,7 +129,7 @@ request in `mail.http` (`ResolveMailboxIdAsync`), which turns an email address i
 
 - **`/graph/*` endpoints call live Microsoft Graph.** They need real credentials and a mailbox you
   have permission to read. Creating a subscription additionally requires Graph to be able to reach
-  `Graph:Subscription:NotificationUrl`, which from a laptop means a public tunnel.
+  `Graph:Subscription:NotificationBaseUrl`, which from a laptop means a public tunnel.
 - **The notification endpoints need no Graph subscription and no public tunnel.** `POST
   /notifications/messages` and `POST /notifications/lifecycle` read the raw request body and hand
   it straight to `IGraphNotificationParser`, so `requests/notifications.http` drives the entire

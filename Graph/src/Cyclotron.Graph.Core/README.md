@@ -46,8 +46,9 @@ services.AddCyclotronGraphCore(options =>
     options.Auth.TenantId = "...";
     options.Auth.ClientId = "...";
     options.Auth.ClientSecret = "...";
-    options.Subscription.NotificationUrl = "https://myapp.example.com/webhooks/graph";
-    options.Subscription.LifecycleNotificationUrl = "https://myapp.example.com/webhooks/graph/lifecycle";
+    options.Subscription.NotificationBaseUrl = "https://myapp.example.com";
+    options.Subscription.NotificationPath = "/webhooks/graph";
+    options.Subscription.LifecycleNotificationPath = "/webhooks/graph/lifecycle";
     options.Subscription.ClientStateSecret = "...";
 });
 ```
@@ -71,24 +72,59 @@ Every `GraphCoreOptions` field, shown with its default value:
       "TokenExpiryBufferSeconds": 90
     },
     "Subscription": {
-      "NotificationUrl": "",
-      "LifecycleNotificationUrl": "",
+      "NotificationBaseUrl": "",
+      "NotificationPath": "",
+      "LifecycleNotificationPath": "",
       "ClientStateSecret": "",
       "ResourceTemplate": "users/{resourceId}/messages",
       "ChangeTypes": "Created, Updated",
       "LifespanMinutes": 10000,
       "RenewWindowHours": 6
     },
-    "BaseAddress": "https://graph.microsoft.com/",
     "ApiVersion": "v1.0",
-    "PreferHeader": "IdType=\"ImmutableId\", outlook.body-content-type=\"text\"",
-    "LoginBaseAddress": "https://login.microsoftonline.com/"
+    "PreferHeader": "IdType=\"ImmutableId\", outlook.body-content-type=\"text\""
   }
 }
 ```
 
+The Graph API and Entra login hosts (`https://graph.microsoft.com/` and
+`https://login.microsoftonline.com/`) are **not** configuration — they're fixed constants in
+`GraphCoreServiceCollectionExtensions`. Every consumer of this library targets the commercial
+Microsoft cloud; a sovereign/national-cloud tenant (US Gov, China) would need different hosts for
+both, but supporting that is out of scope until a consumer actually needs it.
+
 `Auth.TenantId`, `Auth.ClientId`, and `Auth.ClientSecret` are required only when `Auth.Mode` is
 `ClientSecret`; under `DefaultAzureCredential` or `Custom` they are unused and unvalidated.
+
+### `NotificationUrl` / `LifecycleNotificationUrl` are computed, and must be publicly reachable
+
+`NotificationUrl` and `LifecycleNotificationUrl` are read-only, computed from
+`NotificationBaseUrl` + `NotificationPath` and `NotificationBaseUrl` + `LifecycleNotificationPath`
+respectively — there is nothing to set directly. Switching to a new base (a new tunnel, a new
+deployment host) is therefore a one-line change; the two paths stay fixed at whatever your webhook
+host maps them to.
+
+Graph validates both computed URLs when `SubscribeAsync` creates the subscription, and delivers
+every change/lifecycle notification to them afterwards. **`localhost` is rejected outright** —
+Graph's servers have no route to a developer machine, so a subscription request against a
+`localhost` (or any other non-routable) base URL fails at creation time, not later at delivery
+time.
+
+For local development, expose your webhook host through a tunnel and point `NotificationBaseUrl`
+at the tunnel's public HTTPS URL instead:
+
+- **VS Code Dev Tunnels** — forward the port in the **Ports** panel, set visibility to **Public**,
+  and use the resulting `https://*.devtunnels.ms` URL.
+- **ngrok** — `ngrok http <port>` and use the resulting `https://*.ngrok-free.app` forwarding URL.
+
+`NotificationPath` and `LifecycleNotificationPath` should be set once to whatever routes your host
+maps to `IGraphNotificationParser`'s dispatch methods, and left alone after that — they aren't
+secrets and don't change with the tunnel. If the tunnel URL changes (a free ngrok tunnel gets a new
+hostname every restart), existing subscriptions keep delivering to the old URL —
+`RenewSubscriptionAsync` only extends `expiresAt`, it does not update `notificationUrl` — so
+unsubscribe and re-subscribe after the URL changes. See
+[`Cyclotron.Graph.Sample`'s README](../../samples/Cyclotron.Graph.Sample/README.md#dev-tunnels--ngrok-local-development)
+for a worked example against this repo's sample harness.
 
 `Subscription.ResourceTemplate`'s default (`users/{resourceId}/messages`) is a mail-shaped
 convenience default inherited from Core's original extraction context — it is **not** a

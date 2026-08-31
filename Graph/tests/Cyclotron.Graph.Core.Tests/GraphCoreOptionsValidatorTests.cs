@@ -18,8 +18,9 @@ public class GraphCoreOptionsValidatorTests
         Subscription =
         {
             ClientStateSecret = "client-state-secret",
-            NotificationUrl = "https://example.test/notifications",
-            LifecycleNotificationUrl = "https://example.test/lifecycle",
+            NotificationBaseUrl = "https://example.test",
+            NotificationPath = "/notifications",
+            LifecycleNotificationPath = "/lifecycle",
         },
     };
 
@@ -94,15 +95,15 @@ public class GraphCoreOptionsValidatorTests
     [InlineData("/relative/notifications")]
     [InlineData("file:///relative/notifications")]
     [InlineData("relative/notifications")]
-    public void Validate_NonHttpNotificationUrl_FailsNamingThatOptionPath(string notificationUrl)
+    public void Validate_NonHttpNotificationBaseUrl_FailsNamingThatOptionPath(string notificationBaseUrl)
     {
         var options = ValidOptions();
-        options.Subscription.NotificationUrl = notificationUrl;
+        options.Subscription.NotificationBaseUrl = notificationBaseUrl;
 
         var result = Validate(options);
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Failures!, f => f.Contains("GraphCoreOptions.Subscription.NotificationUrl", StringComparison.Ordinal));
+        Assert.Contains(result.Failures!, f => f.Contains("GraphCoreOptions.Subscription.NotificationBaseUrl", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -174,17 +175,19 @@ public class GraphCoreOptionsValidatorTests
     }
 
     [Fact]
-    public void Validate_DefaultConstructedOptions_ReportsAllSixViolations()
+    public void Validate_DefaultConstructedOptions_ReportsAllSevenViolations()
     {
         var options = new GraphCoreOptions();
 
         var result = Validate(options);
 
         Assert.False(result.Succeeded);
-        Assert.Equal(6, result.Failures!.Count());
+        Assert.Equal(7, result.Failures!.Count());
         Assert.Contains(result.Failures!, f => f.Contains("GraphCoreOptions.Auth.TenantId", StringComparison.Ordinal));
         Assert.Contains(result.Failures!, f => f.Contains("GraphCoreOptions.Subscription.ClientStateSecret", StringComparison.Ordinal));
-        Assert.Contains(result.Failures!, f => f.Contains("GraphCoreOptions.Subscription.NotificationUrl", StringComparison.Ordinal));
+        Assert.Contains(result.Failures!, f => f.Contains("GraphCoreOptions.Subscription.NotificationBaseUrl", StringComparison.Ordinal));
+        Assert.Contains(result.Failures!, f => f.Contains("GraphCoreOptions.Subscription.NotificationPath", StringComparison.Ordinal));
+        Assert.Contains(result.Failures!, f => f.Contains("GraphCoreOptions.Subscription.LifecycleNotificationPath", StringComparison.Ordinal));
     }
 
     /// <summary>

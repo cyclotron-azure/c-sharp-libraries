@@ -3,8 +3,9 @@ using System.Text.Json;
 using Cyclotron.Graph.Core.Options;
 using Cyclotron.Graph.Mail.Client;
 using Cyclotron.Graph.Mail.Options;
-using Cyclotron.Graph.Mail.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using Moq.Protected;
 
 namespace Cyclotron.Graph.Mail.Tests;
 
@@ -21,7 +22,85 @@ public class GraphMailClientTests
     /// </summary>
     public sealed record MessageProjection(string Id, string Subject, bool HasAttachments);
 
-    private static (GraphMailClient Client, StubHttpMessageHandler Handler) CreateClient(
+    /// <summary>
+    /// A Moq-backed <see cref="HttpMessageHandler"/> builder that records every request's method,
+    /// URI, and body, and returns caller-scripted responses. <see cref="HttpMessageHandler.SendAsync"/>
+    /// is protected, so the single underlying <see cref="Mock{HttpMessageHandler}"/> setup both
+    /// records the request and dequeues the next scripted response.
+    /// </summary>
+    private sealed class ScriptedHandler
+    {
+        private readonly Queue<Func<HttpRequestMessage, HttpResponseMessage>> _scripted = new();
+        private readonly Mock<HttpMessageHandler> _mock = new();
+
+        public ScriptedHandler()
+        {
+            _mock.Protected()
+                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns(async (HttpRequestMessage request, CancellationToken cancellationToken) =>
+                {
+                    var body = request.Content is null
+                        ? null
+                        : await request.Content.ReadAsStringAsync(cancellationToken);
+
+                    Requests.Add(new RecordedRequest(
+                        request.Method,
+                        request.RequestUri!,
+                        body,
+                        request.Headers.Authorization?.ToString()));
+
+                    if (_scripted.Count > 0)
+                    {
+                        return _scripted.Dequeue()(request);
+                    }
+
+                    throw new InvalidOperationException(
+                        $"ScriptedHandler received an unscripted request: {request.Method} {request.RequestUri}");
+                });
+        }
+
+        /// <summary>The mocked handler to hand to an <see cref="HttpClient"/>.</summary>
+        public HttpMessageHandler Handler => _mock.Object;
+
+        /// <summary>Every request this handler has seen, in order.</summary>
+        public List<RecordedRequest> Requests { get; } = [];
+
+        /// <summary>The most recently recorded request. Throws if nothing has been recorded.</summary>
+        public RecordedRequest LastRequest => Requests[^1];
+
+        /// <summary>Scripts the next response in sequence as JSON with the given status.</summary>
+        public ScriptedHandler RespondWithJson(string json, HttpStatusCode status = HttpStatusCode.OK)
+        {
+            _scripted.Enqueue(_ => new HttpResponseMessage(status)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            });
+            return this;
+        }
+
+        /// <summary>Scripts the next response in sequence as a bare status code with an empty body.</summary>
+        public ScriptedHandler RespondWithStatus(HttpStatusCode status)
+        {
+            _scripted.Enqueue(_ => new HttpResponseMessage(status)
+            {
+                Content = new StringContent(string.Empty)
+            });
+            return this;
+        }
+    }
+
+    /// <summary>One request the scripted handler observed.</summary>
+    private sealed record RecordedRequest(
+        HttpMethod Method,
+        Uri Uri,
+        string? Body,
+        string? Authorization)
+    {
+        /// <summary>The request URI as an unescaped string, for readable substring assertions.</summary>
+        public string UriString => Uri.ToString();
+    }
+
+    private static (GraphMailClient Client, ScriptedHandler Handler) CreateClient(
         Action<GraphMailOptions>? configureMail = null)
     {
         var mailOptions = new GraphMailOptions
@@ -30,10 +109,10 @@ public class GraphMailClientTests
         };
         configureMail?.Invoke(mailOptions);
 
-        var coreOptions = new GraphCoreOptions { BaseAddress = BaseAddress };
+        var coreOptions = new GraphCoreOptions();
 
-        var handler = new StubHttpMessageHandler();
-        var httpClient = new HttpClient(handler) { BaseAddress = new Uri(BaseAddress) };
+        var handler = new ScriptedHandler();
+        var httpClient = new HttpClient(handler.Handler) { BaseAddress = new Uri(BaseAddress) };
 
         var client = new GraphMailClient(
             httpClient,

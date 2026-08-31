@@ -18,9 +18,11 @@ public enum GraphAuthMode
 }
 
 /// <summary>
-/// Root configuration for <c>Cyclotron.Graph.Core</c>: authentication, subscriptions, and the
-/// HTTP endpoints Core's clients target. Bound from the section named by
-/// <see cref="DefaultSectionName"/> unless a consumer's DI wiring specifies a different section.
+/// Root configuration for <c>Cyclotron.Graph.Core</c>: authentication and subscriptions. Bound
+/// from the section named by <see cref="DefaultSectionName"/> unless a consumer's DI wiring
+/// specifies a different section. The commercial-cloud Graph API and Entra login hosts are fixed
+/// in <c>GraphCoreServiceCollectionExtensions</c>, not configurable here — this repo has no
+/// sovereign/national-cloud consumer.
 /// </summary>
 public sealed class GraphCoreOptions
 {
@@ -37,9 +39,6 @@ public sealed class GraphCoreOptions
     /// <summary>Subscription configuration.</summary>
     public GraphSubscriptionOptions Subscription { get; set; } = new();
 
-    /// <summary>The base address of the Microsoft Graph API.</summary>
-    public string BaseAddress { get; set; } = "https://graph.microsoft.com/";
-
     /// <summary>The Graph API version segment used in request routes (e.g. <c>v1.0/subscriptions</c>).</summary>
     public string ApiVersion { get; set; } = "v1.0";
 
@@ -49,9 +48,6 @@ public sealed class GraphCoreOptions
     /// non-mail consumer may clear or replace.
     /// </summary>
     public string PreferHeader { get; set; } = "IdType=\"ImmutableId\", outlook.body-content-type=\"text\"";
-
-    /// <summary>The base address of the Microsoft Entra login endpoint used for token acquisition.</summary>
-    public string LoginBaseAddress { get; set; } = "https://login.microsoftonline.com/";
 }
 
 /// <summary>
@@ -90,11 +86,34 @@ public sealed class GraphSubscriptionOptions
 {
     // Mutable get/set properties, not init-only: this type is bound from configuration.
 
-    /// <summary>The fully-qualified change-notification webhook URL Graph posts to.</summary>
-    public string NotificationUrl { get; set; } = string.Empty;
+    /// <summary>
+    /// The public base URL (scheme + host — e.g. a dev tunnel while developing locally, or the
+    /// deployed app's own address) that <see cref="NotificationPath"/> and
+    /// <see cref="LifecycleNotificationPath"/> are appended to, forming
+    /// <see cref="NotificationUrl"/> and <see cref="LifecycleNotificationUrl"/>. Graph rejects a
+    /// non-publicly-routable host (including <c>localhost</c>) when creating a subscription, so
+    /// this must be reachable from the internet.
+    /// </summary>
+    public string NotificationBaseUrl { get; set; } = string.Empty;
 
-    /// <summary>The fully-qualified lifecycle-notification webhook URL Graph posts to.</summary>
-    public string LifecycleNotificationUrl { get; set; } = string.Empty;
+    /// <summary>The path appended to <see cref="NotificationBaseUrl"/> to form <see cref="NotificationUrl"/>.</summary>
+    public string NotificationPath { get; set; } = string.Empty;
+
+    /// <summary>The path appended to <see cref="NotificationBaseUrl"/> to form <see cref="LifecycleNotificationUrl"/>.</summary>
+    public string LifecycleNotificationPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The fully-qualified change-notification webhook URL Graph posts to — computed from
+    /// <see cref="NotificationBaseUrl"/> + <see cref="NotificationPath"/>, so switching to a new
+    /// base (a new tunnel, for example) only means updating one setting.
+    /// </summary>
+    public string NotificationUrl => Combine(NotificationBaseUrl, NotificationPath);
+
+    /// <summary>
+    /// The fully-qualified lifecycle-notification webhook URL Graph posts to — computed from
+    /// <see cref="NotificationBaseUrl"/> + <see cref="LifecycleNotificationPath"/>.
+    /// </summary>
+    public string LifecycleNotificationUrl => Combine(NotificationBaseUrl, LifecycleNotificationPath);
 
     /// <summary>The secret embedded as <c>clientState</c> on created subscriptions and validated on incoming notifications.</summary>
     public string ClientStateSecret { get; set; } = string.Empty;
@@ -118,4 +137,14 @@ public sealed class GraphSubscriptionOptions
     /// be renewed by a periodic true-up.
     /// </summary>
     public int RenewWindowHours { get; set; } = 6;
+
+    private static string Combine(string baseUrl, string path)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        return $"{baseUrl.TrimEnd('/')}/{path.TrimStart('/')}";
+    }
 }

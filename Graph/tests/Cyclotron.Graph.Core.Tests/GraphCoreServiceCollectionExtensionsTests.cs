@@ -10,6 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
+using Moq.Protected;
 
 namespace Cyclotron.Graph.Core.Tests;
 
@@ -21,8 +23,9 @@ public class GraphCoreServiceCollectionExtensionsTests
         options.Auth.ClientId = "client-id";
         options.Auth.ClientSecret = "client-secret";
         options.Subscription.ClientStateSecret = "client-state-secret";
-        options.Subscription.NotificationUrl = "https://example.test/notifications";
-        options.Subscription.LifecycleNotificationUrl = "https://example.test/lifecycle";
+        options.Subscription.NotificationBaseUrl = "https://example.test";
+        options.Subscription.NotificationPath = "/notifications";
+        options.Subscription.LifecycleNotificationPath = "/lifecycle";
     }
 
     private static ServiceProvider BuildProvider(Action<GraphCoreOptions>? extraConfigure = null)
@@ -104,12 +107,25 @@ public class GraphCoreServiceCollectionExtensionsTests
         Assert.Equal(expectedImplementation, descriptor.ImplementationType);
     }
 
+    /// <summary>
+    /// Adaptation note: the original test registered a hand-written <c>ConsumerTokenProvider</c>
+    /// class so the descriptor's <c>ImplementationType</c> was assertable. Registering
+    /// <c>tokenProvider.Object</c> instead makes <c>ImplementationType</c> null and populates
+    /// <c>ImplementationInstance</c> instead, since Moq mocks are runtime-generated proxy types
+    /// rather than the interface type itself. The adapted assertion — that there is exactly one
+    /// <see cref="IGraphTokenProvider"/> descriptor, and that the service resolved from the
+    /// container is reference-equal to the consumer's own registered instance — is strictly
+    /// stronger than the original <c>ImplementationType</c> check: it proves the registration
+    /// pipeline left the consumer's own instance in place and resolvable, not merely that a
+    /// particular type name survived.
+    /// </summary>
     [Fact]
     public void AddCyclotronGraphCore_CustomAuthMode_LeavesConsumerTokenProviderInPlace()
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton<IGraphTokenProvider, ConsumerTokenProvider>();
+        var tokenProvider = new Mock<IGraphTokenProvider>();
+        services.AddSingleton(tokenProvider.Object);
 
         services.AddCyclotronGraphCore(options =>
         {
@@ -117,8 +133,11 @@ public class GraphCoreServiceCollectionExtensionsTests
             options.Auth.Mode = GraphAuthMode.Custom;
         });
 
-        var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IGraphTokenProvider));
-        Assert.Equal(typeof(ConsumerTokenProvider), descriptor.ImplementationType);
+        Assert.Single(services, d => d.ServiceType == typeof(IGraphTokenProvider));
+        using var provider = services.BuildServiceProvider();
+        var resolved = provider.GetRequiredService<IGraphTokenProvider>();
+
+        Assert.Same(tokenProvider.Object, resolved);
     }
 
     [Fact]
@@ -131,7 +150,7 @@ public class GraphCoreServiceCollectionExtensionsTests
         var exception = await Assert.ThrowsAsync<OptionsValidationException>(
             () => host.StartAsync(TestContext.Current.CancellationToken));
 
-        Assert.Equal(6, exception.Failures.Count());
+        Assert.Equal(7, exception.Failures.Count());
     }
 
     [Fact]
@@ -144,8 +163,9 @@ public class GraphCoreServiceCollectionExtensionsTests
                 ["MyGraph:Auth:ClientId"] = "c",
                 ["MyGraph:Auth:ClientSecret"] = "s",
                 ["MyGraph:Subscription:ClientStateSecret"] = "css",
-                ["MyGraph:Subscription:NotificationUrl"] = "https://example.test/notifications",
-                ["MyGraph:Subscription:LifecycleNotificationUrl"] = "https://example.test/lifecycle",
+                ["MyGraph:Subscription:NotificationBaseUrl"] = "https://example.test",
+                ["MyGraph:Subscription:NotificationPath"] = "/notifications",
+                ["MyGraph:Subscription:LifecycleNotificationPath"] = "/lifecycle",
                 ["MyGraph:Subscription:ChangeTypes"] = "Created, Deleted",
                 ["MyGraph:Subscription:LifespanMinutes"] = "4321",
             })
@@ -196,11 +216,6 @@ public class GraphCoreServiceCollectionExtensionsTests
         Assert.Same(fromScopeA, fromScopeB);
         Assert.NotNull(handlerFromRoot);
     }
-
-    private sealed class ConsumerTokenProvider : IGraphTokenProvider
-    {
-        public Task<string> GetTokenAsync(CancellationToken ct = default) => Task.FromResult("consumer-token");
-    }
 }
 
 /// <summary>
@@ -213,12 +228,11 @@ public class ClientSecretTokenProviderBehaviorTests
 {
     private const string TenantId = "tenant-id";
 
-    private static (ClientSecretTokenProvider Provider, StubHttpMessageHandler Handler) CreateProvider(
+    private static (ClientSecretTokenProvider Provider, MockHttpHandlerBuilder Handler) CreateProvider(
         int tokenExpiryBufferSeconds = 90)
     {
         var options = new GraphCoreOptions
         {
-            LoginBaseAddress = "https://login.test/",
             Auth =
             {
                 TenantId = TenantId,
@@ -229,13 +243,15 @@ public class ClientSecretTokenProviderBehaviorTests
             },
         };
 
-        var handler = new StubHttpMessageHandler();
-        var httpClient = new HttpClient(handler) { BaseAddress = new Uri(options.LoginBaseAddress) };
-        var factory = new StubHttpClientFactory(httpClient);
+        var handler = new MockHttpHandlerBuilder();
+        var httpClient = handler.CreateHttpClient("https://login.test/");
+
+        var httpClientFactory = new Mock<IHttpClientFactory>();
+        httpClientFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(httpClient);
 
         var provider = new ClientSecretTokenProvider(
             Microsoft.Extensions.Options.Options.Create(options),
-            factory,
+            httpClientFactory.Object,
             NullLogger<ClientSecretTokenProvider>.Instance);
 
         return (provider, handler);
@@ -253,7 +269,7 @@ public class ClientSecretTokenProviderBehaviorTests
         var first = await provider.GetTokenAsync(TestContext.Current.CancellationToken);
         var second = await provider.GetTokenAsync(TestContext.Current.CancellationToken);
 
-        Assert.Single(handler.Requests);
+        handler.VerifyRequestCount(1);
         Assert.Equal("token-1", first);
         Assert.Equal(first, second);
     }
@@ -272,7 +288,7 @@ public class ClientSecretTokenProviderBehaviorTests
         await provider.GetTokenAsync(TestContext.Current.CancellationToken);
         var second = await provider.GetTokenAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(2, handler.Requests.Count);
+        handler.VerifyRequestCount(2);
         Assert.Equal("token-2", second);
     }
 
@@ -307,7 +323,7 @@ public class ClientSecretTokenProviderBehaviorTests
             () => provider.GetTokenAsync(TestContext.Current.CancellationToken));
         var afterRetry = await provider.GetTokenAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(2, handler.Requests.Count);
+        handler.VerifyRequestCount(2);
         Assert.Equal("good-token", afterRetry);
     }
 
@@ -319,10 +335,5 @@ public class ClientSecretTokenProviderBehaviorTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => provider.GetTokenAsync(TestContext.Current.CancellationToken));
-    }
-
-    private sealed class StubHttpClientFactory(HttpClient client) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => client;
     }
 }

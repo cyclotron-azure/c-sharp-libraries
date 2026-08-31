@@ -43,8 +43,9 @@ services.AddCyclotronGraphMail(
         options.Auth.TenantId = "...";
         options.Auth.ClientId = "...";
         options.Auth.ClientSecret = "...";
-        options.Subscription.NotificationUrl = "https://myapp.example.com/webhooks/graph";
-        options.Subscription.LifecycleNotificationUrl = "https://myapp.example.com/webhooks/graph/lifecycle";
+        options.Subscription.NotificationBaseUrl = "https://myapp.example.com";
+        options.Subscription.NotificationPath = "/webhooks/graph";
+        options.Subscription.LifecycleNotificationPath = "/webhooks/graph/lifecycle";
         options.Subscription.ClientStateSecret = "...";
     },
     configureMail: options =>
@@ -72,18 +73,17 @@ A consumer writes the Core (`Graph`) and Mail (`Graph:Mail`) sections together:
       "TokenExpiryBufferSeconds": 90
     },
     "Subscription": {
-      "NotificationUrl": "",
-      "LifecycleNotificationUrl": "",
+      "NotificationBaseUrl": "",
+      "NotificationPath": "",
+      "LifecycleNotificationPath": "",
       "ClientStateSecret": "",
       "ResourceTemplate": "users/{resourceId}/messages",
       "ChangeTypes": "Created, Updated",
       "LifespanMinutes": 10000,
       "RenewWindowHours": 6
     },
-    "BaseAddress": "https://graph.microsoft.com/",
     "ApiVersion": "v1.0",
     "PreferHeader": "IdType=\"ImmutableId\", outlook.body-content-type=\"text\"",
-    "LoginBaseAddress": "https://login.microsoftonline.com/",
     "Mail": {
       "Message": {
         "SelectFields": [

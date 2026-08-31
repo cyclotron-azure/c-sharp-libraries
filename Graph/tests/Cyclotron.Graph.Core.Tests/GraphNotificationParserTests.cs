@@ -1,10 +1,11 @@
 using System.Text.Json;
+using Cyclotron.Graph.Core.Abstractions;
 using Cyclotron.Graph.Core.Models;
 using Cyclotron.Graph.Core.Notifications;
 using Cyclotron.Graph.Core.Options;
-using Cyclotron.Graph.Core.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Moq;
 
 namespace Cyclotron.Graph.Core.Tests;
 
@@ -16,6 +17,14 @@ namespace Cyclotron.Graph.Core.Tests;
 public class GraphNotificationParserTests
 {
     private const string ClientStateSecret = "client-state-secret";
+
+    /// <summary>Which <see cref="IGraphLifecycleNotificationSink"/> method a routing test expects to fire.</summary>
+    public enum LifecycleSinkMethod
+    {
+        ReauthorizationRequired,
+        SubscriptionRemoved,
+        Missed,
+    }
 
     private static GraphNotificationParser CreateParser(
         GraphChangeType changeTypes = GraphChangeType.Created | GraphChangeType.Updated)
@@ -64,11 +73,42 @@ public class GraphNotificationParserTests
         }
         """;
 
+    /// <summary>Builds a message sink mock and a list that records every notification dispatched to it, in order.</summary>
+    private static (Mock<IGraphMessageNotificationSink> Mock, List<GraphChangeNotification> Received) CreateMessageSink()
+    {
+        var mock = new Mock<IGraphMessageNotificationSink>();
+        var received = new List<GraphChangeNotification>();
+        mock.Setup(s => s.OnResourceChangedAsync(It.IsAny<GraphChangeNotification>(), It.IsAny<CancellationToken>()))
+            .Callback<GraphChangeNotification, CancellationToken>((notification, _) => received.Add(notification))
+            .Returns(Task.CompletedTask);
+
+        return (mock, received);
+    }
+
+    /// <summary>Builds a lifecycle sink mock whose three methods all succeed, for routing assertions via Verify.</summary>
+    private static Mock<IGraphLifecycleNotificationSink> CreateLifecycleSink()
+    {
+        var mock = new Mock<IGraphLifecycleNotificationSink>();
+        mock.Setup(s => s.OnReauthorizationRequiredAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        mock.Setup(s => s.OnSubscriptionRemovedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        mock.Setup(s => s.OnMissedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        return mock;
+    }
+
+    /// <summary>Verifies none of the three lifecycle sink methods were ever invoked.</summary>
+    private static void VerifyNoLifecycleDispatch(Mock<IGraphLifecycleNotificationSink> sink)
+    {
+        sink.Verify(s => s.OnReauthorizationRequiredAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never());
+        sink.Verify(s => s.OnSubscriptionRemovedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never());
+        sink.Verify(s => s.OnMissedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never());
+    }
+
     [Fact]
     public async Task DispatchMessageNotificationsAsync_TwoValidNotifications_DispatchesExactlyTwice()
     {
         var parser = CreateParser();
-        var sink = new RecordingMessageSink();
+        var (sink, received) = CreateMessageSink();
         const string payload = """
         {
           "value": [
@@ -90,40 +130,40 @@ public class GraphNotificationParserTests
         }
         """;
 
-        await parser.DispatchMessageNotificationsAsync(payload, sink, TestContext.Current.CancellationToken);
+        await parser.DispatchMessageNotificationsAsync(payload, sink.Object, TestContext.Current.CancellationToken);
 
-        Assert.Equal(2, sink.Received.Count);
-        Assert.Equal(["msg-1", "msg-2"], sink.Received.Select(n => n.ResourceData!.Id));
-        Assert.Equal(["sub-1", "sub-2"], sink.Received.Select(n => n.SubscriptionId));
+        Assert.Equal(2, received.Count);
+        Assert.Equal(["msg-1", "msg-2"], received.Select(n => n.ResourceData!.Id));
+        Assert.Equal(["sub-1", "sub-2"], received.Select(n => n.SubscriptionId));
     }
 
     [Fact]
     public async Task DispatchMessageNotificationsAsync_InvalidClientState_DispatchesNothing()
     {
         var parser = CreateParser();
-        var sink = new RecordingMessageSink();
+        var (sink, received) = CreateMessageSink();
 
-        await parser.DispatchMessageNotificationsAsync(ChangePayload(clientState: "wrong-secret"), sink, TestContext.Current.CancellationToken);
+        await parser.DispatchMessageNotificationsAsync(ChangePayload(clientState: "wrong-secret"), sink.Object, TestContext.Current.CancellationToken);
 
-        Assert.Empty(sink.Received);
+        Assert.Empty(received);
     }
 
     [Fact]
     public async Task DispatchMessageNotificationsAsync_ChangeTypeOutsideConfiguredMask_DispatchesNothing()
     {
         var parser = CreateParser(changeTypes: GraphChangeType.Created);
-        var sink = new RecordingMessageSink();
+        var (sink, received) = CreateMessageSink();
 
-        await parser.DispatchMessageNotificationsAsync(ChangePayload(changeType: "deleted"), sink, TestContext.Current.CancellationToken);
+        await parser.DispatchMessageNotificationsAsync(ChangePayload(changeType: "deleted"), sink.Object, TestContext.Current.CancellationToken);
 
-        Assert.Empty(sink.Received);
+        Assert.Empty(received);
     }
 
     [Fact]
     public async Task DispatchMessageNotificationsAsync_MissingResourceData_SkipsWithoutThrowing()
     {
         var parser = CreateParser();
-        var sink = new RecordingMessageSink();
+        var (sink, received) = CreateMessageSink();
         const string payload = """
         {
           "value": [
@@ -137,42 +177,44 @@ public class GraphNotificationParserTests
         }
         """;
 
-        await parser.DispatchMessageNotificationsAsync(payload, sink, TestContext.Current.CancellationToken);
+        await parser.DispatchMessageNotificationsAsync(payload, sink.Object, TestContext.Current.CancellationToken);
 
-        Assert.Empty(sink.Received);
+        Assert.Empty(received);
     }
 
     [Fact]
     public async Task DispatchMessageNotificationsAsync_EmptyValueArray_DispatchesNothing()
     {
         var parser = CreateParser();
-        var sink = new RecordingMessageSink();
+        var (sink, received) = CreateMessageSink();
 
-        await parser.DispatchMessageNotificationsAsync("""{ "value": [] }""", sink, TestContext.Current.CancellationToken);
+        await parser.DispatchMessageNotificationsAsync("""{ "value": [] }""", sink.Object, TestContext.Current.CancellationToken);
 
-        Assert.Empty(sink.Received);
+        Assert.Empty(received);
     }
 
     [Fact]
     public async Task DispatchMessageNotificationsAsync_MalformedJson_ThrowsJsonException()
     {
         var parser = CreateParser();
-        var sink = new RecordingMessageSink();
+        var (sink, received) = CreateMessageSink();
 
         await Assert.ThrowsAsync<JsonException>(
-            () => parser.DispatchMessageNotificationsAsync("{ not json", sink, TestContext.Current.CancellationToken));
+            () => parser.DispatchMessageNotificationsAsync("{ not json", sink.Object, TestContext.Current.CancellationToken));
 
-        Assert.Empty(sink.Received);
+        Assert.Empty(received);
     }
 
     [Fact]
     public async Task DispatchMessageNotificationsAsync_SinkThrows_PropagatesSinkException()
     {
         var parser = CreateParser();
-        var sink = new RecordingMessageSink { ThrowOnDispatch = new InvalidTimeZoneException("sink failed") };
+        var sink = new Mock<IGraphMessageNotificationSink>();
+        sink.Setup(s => s.OnResourceChangedAsync(It.IsAny<GraphChangeNotification>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidTimeZoneException("sink failed"));
 
         await Assert.ThrowsAsync<InvalidTimeZoneException>(
-            () => parser.DispatchMessageNotificationsAsync(ChangePayload(), sink, TestContext.Current.CancellationToken));
+            () => parser.DispatchMessageNotificationsAsync(ChangePayload(), sink.Object, TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -183,20 +225,26 @@ public class GraphNotificationParserTests
         string lifecycleEvent, LifecycleSinkMethod expectedMethod)
     {
         var parser = CreateParser();
-        var sink = new RecordingLifecycleSink();
+        var sink = CreateLifecycleSink();
 
-        await parser.DispatchLifecycleNotificationsAsync(LifecyclePayload(lifecycleEvent, "sub-42"), sink, TestContext.Current.CancellationToken);
+        await parser.DispatchLifecycleNotificationsAsync(LifecyclePayload(lifecycleEvent, "sub-42"), sink.Object, TestContext.Current.CancellationToken);
 
-        var call = Assert.Single(sink.Received);
-        Assert.Equal(expectedMethod, call.Method);
-        Assert.Equal("sub-42", call.SubscriptionId);
+        sink.Verify(
+            s => s.OnReauthorizationRequiredAsync("sub-42", It.IsAny<CancellationToken>()),
+            expectedMethod == LifecycleSinkMethod.ReauthorizationRequired ? Times.Once() : Times.Never());
+        sink.Verify(
+            s => s.OnSubscriptionRemovedAsync("sub-42", It.IsAny<CancellationToken>()),
+            expectedMethod == LifecycleSinkMethod.SubscriptionRemoved ? Times.Once() : Times.Never());
+        sink.Verify(
+            s => s.OnMissedAsync("sub-42", It.IsAny<CancellationToken>()),
+            expectedMethod == LifecycleSinkMethod.Missed ? Times.Once() : Times.Never());
     }
 
     [Fact]
     public async Task DispatchLifecycleNotificationsAsync_AbsentLifecycleEvent_DispatchesNothingWithoutThrowing()
     {
         var parser = CreateParser();
-        var sink = new RecordingLifecycleSink();
+        var sink = CreateLifecycleSink();
         const string payload = """
         {
           "value": [
@@ -208,16 +256,16 @@ public class GraphNotificationParserTests
         }
         """;
 
-        await parser.DispatchLifecycleNotificationsAsync(payload, sink, TestContext.Current.CancellationToken);
+        await parser.DispatchLifecycleNotificationsAsync(payload, sink.Object, TestContext.Current.CancellationToken);
 
-        Assert.Empty(sink.Received);
+        VerifyNoLifecycleDispatch(sink);
     }
 
     [Fact]
     public async Task DispatchLifecycleNotificationsAsync_InvalidClientState_DispatchesNothing()
     {
         var parser = CreateParser();
-        var sink = new RecordingLifecycleSink();
+        var sink = CreateLifecycleSink();
         const string payload = """
         {
           "value": [
@@ -230,20 +278,20 @@ public class GraphNotificationParserTests
         }
         """;
 
-        await parser.DispatchLifecycleNotificationsAsync(payload, sink, TestContext.Current.CancellationToken);
+        await parser.DispatchLifecycleNotificationsAsync(payload, sink.Object, TestContext.Current.CancellationToken);
 
-        Assert.Empty(sink.Received);
+        VerifyNoLifecycleDispatch(sink);
     }
 
     [Fact]
     public async Task DispatchLifecycleNotificationsAsync_MalformedJson_ThrowsJsonException()
     {
         var parser = CreateParser();
-        var sink = new RecordingLifecycleSink();
+        var sink = CreateLifecycleSink();
 
         await Assert.ThrowsAsync<JsonException>(
-            () => parser.DispatchLifecycleNotificationsAsync("{ not json", sink, TestContext.Current.CancellationToken));
+            () => parser.DispatchLifecycleNotificationsAsync("{ not json", sink.Object, TestContext.Current.CancellationToken));
 
-        Assert.Empty(sink.Received);
+        VerifyNoLifecycleDispatch(sink);
     }
 }

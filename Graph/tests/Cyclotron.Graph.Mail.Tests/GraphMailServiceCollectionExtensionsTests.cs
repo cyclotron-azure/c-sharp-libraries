@@ -1,19 +1,90 @@
+using System.Net;
 using Cyclotron.Graph.Core.Abstractions;
 using Cyclotron.Graph.Core.Extensions;
 using Cyclotron.Graph.Core.Options;
 using Cyclotron.Graph.Mail.Abstractions;
 using Cyclotron.Graph.Mail.Extensions;
 using Cyclotron.Graph.Mail.Options;
-using Cyclotron.Graph.Mail.Tests.TestSupport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Moq;
+using Moq.Protected;
 
 namespace Cyclotron.Graph.Mail.Tests;
 
 public class GraphMailServiceCollectionExtensionsTests
 {
+    /// <summary>
+    /// A Moq-backed <see cref="HttpMessageHandler"/> builder that records every request's method,
+    /// URI, and body, and returns a caller-scripted fallback response for every request.
+    /// <see cref="HttpMessageHandler.SendAsync"/> is protected, so the single underlying
+    /// <see cref="Mock{HttpMessageHandler}"/> setup both records the request and returns the
+    /// scripted response.
+    /// </summary>
+    private sealed class ScriptedHandler
+    {
+        private readonly Mock<HttpMessageHandler> _mock = new();
+        private Func<HttpRequestMessage, HttpResponseMessage>? _fallback;
+
+        public ScriptedHandler()
+        {
+            _mock.Protected()
+                .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .Returns(async (HttpRequestMessage request, CancellationToken cancellationToken) =>
+                {
+                    var body = request.Content is null
+                        ? null
+                        : await request.Content.ReadAsStringAsync(cancellationToken);
+
+                    Requests.Add(new RecordedRequest(
+                        request.Method,
+                        request.RequestUri!,
+                        body,
+                        request.Headers.Authorization?.ToString()));
+
+                    if (_fallback is not null)
+                    {
+                        return _fallback(request);
+                    }
+
+                    throw new InvalidOperationException(
+                        $"ScriptedHandler received an unscripted request: {request.Method} {request.RequestUri}");
+                });
+        }
+
+        /// <summary>The mocked handler to hand to an <see cref="HttpClient"/> factory.</summary>
+        public HttpMessageHandler Handler => _mock.Object;
+
+        /// <summary>Every request this handler has seen, in order.</summary>
+        public List<RecordedRequest> Requests { get; } = [];
+
+        /// <summary>
+        /// Sets the response used for every request. Without one, an unscripted request fails the
+        /// test loudly rather than silently returning a default response.
+        /// </summary>
+        public ScriptedHandler AlwaysRespondWithJson(string json, HttpStatusCode status = HttpStatusCode.OK)
+        {
+            _fallback = _ => new HttpResponseMessage(status)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            };
+            return this;
+        }
+    }
+
+    /// <summary>One request the scripted handler observed.</summary>
+    private sealed record RecordedRequest(
+        HttpMethod Method,
+        Uri Uri,
+        string? Body,
+        string? Authorization)
+    {
+        /// <summary>The request URI as an unescaped string, for readable substring assertions.</summary>
+        public string UriString => Uri.ToString();
+    }
+
     /// <summary>The nine documented defaults, in their documented order, hard-coded deliberately.</summary>
     private static readonly string[] ExpectedDefaultSelectFields =
     [
@@ -34,8 +105,9 @@ public class GraphMailServiceCollectionExtensionsTests
         options.Auth.ClientId = "client-id";
         options.Auth.ClientSecret = "client-secret";
         options.Subscription.ClientStateSecret = "client-state-secret";
-        options.Subscription.NotificationUrl = "https://example.test/notifications";
-        options.Subscription.LifecycleNotificationUrl = "https://example.test/lifecycle";
+        options.Subscription.NotificationBaseUrl = "https://example.test";
+        options.Subscription.NotificationPath = "/notifications";
+        options.Subscription.LifecycleNotificationPath = "/lifecycle";
     }
 
     private static Dictionary<string, string?> ValidCoreConfiguration() => new()
@@ -44,8 +116,9 @@ public class GraphMailServiceCollectionExtensionsTests
         ["Graph:Auth:ClientId"] = "client-id",
         ["Graph:Auth:ClientSecret"] = "client-secret",
         ["Graph:Subscription:ClientStateSecret"] = "client-state-secret",
-        ["Graph:Subscription:NotificationUrl"] = "https://example.test/notifications",
-        ["Graph:Subscription:LifecycleNotificationUrl"] = "https://example.test/lifecycle",
+        ["Graph:Subscription:NotificationBaseUrl"] = "https://example.test",
+        ["Graph:Subscription:NotificationPath"] = "/notifications",
+        ["Graph:Subscription:LifecycleNotificationPath"] = "/lifecycle",
     };
 
     [Fact]
@@ -80,25 +153,26 @@ public class GraphMailServiceCollectionExtensionsTests
 
     /// <summary>
     /// Issues a real request through each client with the primary handler stubbed, so this asserts
-    /// the shared base address and the auth handler's presence behaviorally rather than by reading
-    /// registration descriptors.
+    /// the shared (fixed, commercial-cloud) base address and the auth handler's presence
+    /// behaviorally rather than by reading registration descriptors.
     /// </summary>
     [Fact]
     public async Task AddCyclotronGraphMail_BothClients_ShareBaseAddressAndCarryAuthHandler()
     {
-        var handler = new StubHttpMessageHandler().AlwaysRespondWithJson("""{ "value": [] }""");
+        var handler = new ScriptedHandler().AlwaysRespondWithJson("""{ "value": [] }""");
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton<IGraphTokenProvider>(new StubTokenProvider());
+        var tokenProvider = new Mock<IGraphTokenProvider>();
+        tokenProvider.Setup(p => p.GetTokenAsync(It.IsAny<CancellationToken>())).ReturnsAsync("stub-token");
+        services.AddSingleton(tokenProvider.Object);
         services.AddCyclotronGraphMail(
             options =>
             {
                 ConfigureValidCore(options);
                 options.Auth.Mode = GraphAuthMode.Custom;
-                options.BaseAddress = "https://graph.test/";
             },
             mail => mail.Message.SelectFields = ["subject"]);
-        services.ConfigureHttpClientDefaults(b => b.ConfigurePrimaryHttpMessageHandler(() => handler));
+        services.ConfigureHttpClientDefaults(b => b.ConfigurePrimaryHttpMessageHandler(() => handler.Handler));
 
         using var provider = services.BuildServiceProvider();
         await provider.GetRequiredService<IGraphSubscriptionClient>()
@@ -107,7 +181,7 @@ public class GraphMailServiceCollectionExtensionsTests
             .ResolveMailboxIdAsync("user@contoso.com", TestContext.Current.CancellationToken);
 
         Assert.Equal(2, handler.Requests.Count);
-        Assert.All(handler.Requests, r => Assert.StartsWith("https://graph.test/", r.UriString, StringComparison.Ordinal));
+        Assert.All(handler.Requests, r => Assert.StartsWith("https://graph.microsoft.com/", r.UriString, StringComparison.Ordinal));
         Assert.All(handler.Requests, r => Assert.Equal("Bearer stub-token", r.Authorization));
     }
 
@@ -227,10 +301,5 @@ public class GraphMailServiceCollectionExtensionsTests
         var options = provider.GetRequiredService<IOptions<GraphMailOptions>>().Value;
 
         Assert.Null(options.Delta.SelectFields);
-    }
-
-    private sealed class StubTokenProvider : IGraphTokenProvider
-    {
-        public Task<string> GetTokenAsync(CancellationToken ct = default) => Task.FromResult("stub-token");
     }
 }

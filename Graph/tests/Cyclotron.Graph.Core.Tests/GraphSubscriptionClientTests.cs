@@ -5,6 +5,8 @@ using Cyclotron.Graph.Core.Models;
 using Cyclotron.Graph.Core.Options;
 using Cyclotron.Graph.Core.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using Moq.Protected;
 
 namespace Cyclotron.Graph.Core.Tests;
 
@@ -12,23 +14,23 @@ public class GraphSubscriptionClientTests
 {
     private const string BaseAddress = "https://graph.test/";
 
-    private static (GraphSubscriptionClient Client, StubHttpMessageHandler Handler) CreateClient(
+    private static (GraphSubscriptionClient Client, MockHttpHandlerBuilder Handler) CreateClient(
         Action<GraphCoreOptions>? configure = null)
     {
         var options = new GraphCoreOptions
         {
-            BaseAddress = BaseAddress,
             Subscription =
             {
                 ClientStateSecret = "client-state-secret",
-                NotificationUrl = "https://example.test/notifications",
-                LifecycleNotificationUrl = "https://example.test/lifecycle",
+                NotificationBaseUrl = "https://example.test",
+                NotificationPath = "/notifications",
+                LifecycleNotificationPath = "/lifecycle",
             },
         };
         configure?.Invoke(options);
 
-        var handler = new StubHttpMessageHandler();
-        var httpClient = new HttpClient(handler) { BaseAddress = new Uri(options.BaseAddress) };
+        var handler = new MockHttpHandlerBuilder();
+        var httpClient = handler.CreateHttpClient(BaseAddress);
 
         var client = new GraphSubscriptionClient(
             httpClient,

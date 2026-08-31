@@ -37,6 +37,12 @@ namespace Cyclotron.Graph.Core.Extensions;
 /// </remarks>
 public static class GraphCoreServiceCollectionExtensions
 {
+    // Fixed rather than configurable: every consumer of this library targets the commercial
+    // Microsoft cloud. A sovereign/national-cloud consumer (US Gov, China) would need different
+    // hosts for both, but none exists in this repo today.
+    private const string GraphApiBaseUrl = "https://graph.microsoft.com/";
+    private const string EntraLoginBaseUrl = "https://login.microsoftonline.com/";
+
     /// <summary>
     /// Registers <c>Cyclotron.Graph.Core</c>, binding <see cref="GraphCoreOptions"/> from the
     /// named configuration section.
@@ -109,10 +115,9 @@ public static class GraphCoreServiceCollectionExtensions
     {
         services.TryAddSingleton<IValidateOptions<GraphCoreOptions>, GraphCoreOptionsValidator>();
 
-        services.AddHttpClient(GraphHttpClientNames.Token, (sp, client) =>
+        services.AddHttpClient(GraphHttpClientNames.Token, client =>
         {
-            var options = sp.GetRequiredService<IOptions<GraphCoreOptions>>().Value;
-            client.BaseAddress = new Uri(options.LoginBaseAddress);
+            client.BaseAddress = new Uri(EntraLoginBaseUrl);
         });
 
         // GraphAuthHandler is transient (see the class-level remarks) and must never capture a
@@ -158,11 +163,10 @@ public static class GraphCoreServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Configures the Graph API named/typed <see cref="HttpClient"/> — base address from
-    /// <see cref="GraphCoreOptions.BaseAddress"/>, the <c>Prefer</c> header from
-    /// <see cref="GraphCoreOptions.PreferHeader"/>, and <see cref="GraphAuthHandler"/> on the
-    /// handler chain — and adds it as a typed client for <typeparamref name="TService"/> /
-    /// <typeparamref name="TImplementation"/>.
+    /// Configures the Graph API named/typed <see cref="HttpClient"/> — the fixed commercial-cloud
+    /// base address, the <c>Prefer</c> header from <see cref="GraphCoreOptions.PreferHeader"/>, and
+    /// <see cref="GraphAuthHandler"/> on the handler chain — and adds it as a typed client for
+    /// <typeparamref name="TService"/> / <typeparamref name="TImplementation"/>.
     /// </summary>
     /// <remarks>
     /// Internal so that <c>Cyclotron.Graph.Mail</c>'s <c>AddCyclotronGraphMail</c> can register
@@ -178,7 +182,7 @@ public static class GraphCoreServiceCollectionExtensions
         return services.AddHttpClient<TService, TImplementation>((sp, client) =>
             {
                 var options = sp.GetRequiredService<IOptions<GraphCoreOptions>>().Value;
-                client.BaseAddress = new Uri(options.BaseAddress);
+                client.BaseAddress = new Uri(GraphApiBaseUrl);
                 client.DefaultRequestHeaders.Add("Prefer", options.PreferHeader);
             })
             .AddHttpMessageHandler<GraphAuthHandler>();

@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C#: Sample Debug",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build sample",
+            "program": "${workspaceFolder}/Graph/samples/Cyclotron.Graph.Sample/bin/Debug/net10.0/Cyclotron.Graph.Sample.dll",
+            "cwd": "${workspaceFolder}/Graph/samples/Cyclotron.Graph.Sample",
+            "console": "internalConsole",
+            "stopAtEntry": false,
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:5280",
+                "AZURE_TOKEN_CREDENTIALS": "AzureCliCredential"
+            },
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\bNow listening on:\s+(https?://\S+)"
+            }
+        }
+    ]
+}

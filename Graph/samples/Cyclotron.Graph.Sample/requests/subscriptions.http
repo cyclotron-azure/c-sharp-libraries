@@ -7,7 +7,7 @@
 ###
 # ─── IGraphSubscriptionClient ────────────────────────────────────────────────
 # Every request here calls live Microsoft Graph. Creating a subscription additionally requires
-# Graph to be able to REACH Graph:Subscription:NotificationUrl — see README.md.
+# Graph to be able to REACH Graph:Subscription:NotificationBaseUrl — see README.md.
 ###
 
 ### IGraphSubscriptionClient.SubscribeAsync

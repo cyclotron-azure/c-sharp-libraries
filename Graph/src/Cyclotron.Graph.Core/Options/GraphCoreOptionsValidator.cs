@@ -65,14 +65,19 @@ internal sealed class GraphCoreOptionsValidator : IValidateOptions<GraphCoreOpti
             failures.Add("GraphCoreOptions.Subscription.ClientStateSecret must be configured.");
         }
 
-        if (!IsAbsoluteUri(subscription.NotificationUrl))
+        if (!IsAbsoluteUri(subscription.NotificationBaseUrl))
         {
-            failures.Add("GraphCoreOptions.Subscription.NotificationUrl must be an absolute http(s) URI.");
+            failures.Add("GraphCoreOptions.Subscription.NotificationBaseUrl must be an absolute http(s) URI.");
         }
 
-        if (!IsAbsoluteUri(subscription.LifecycleNotificationUrl))
+        if (string.IsNullOrWhiteSpace(subscription.NotificationPath))
         {
-            failures.Add("GraphCoreOptions.Subscription.LifecycleNotificationUrl must be an absolute http(s) URI.");
+            failures.Add("GraphCoreOptions.Subscription.NotificationPath must be configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(subscription.LifecycleNotificationPath))
+        {
+            failures.Add("GraphCoreOptions.Subscription.LifecycleNotificationPath must be configured.");
         }
 
         if (string.IsNullOrWhiteSpace(subscription.ResourceTemplate) ||
@@ -99,16 +104,6 @@ internal sealed class GraphCoreOptionsValidator : IValidateOptions<GraphCoreOpti
 
     private static void ValidateEndpoints(GraphCoreOptions options, List<string> failures)
     {
-        if (!IsAbsoluteUri(options.BaseAddress))
-        {
-            failures.Add("GraphCoreOptions.BaseAddress must be an absolute http(s) URI.");
-        }
-
-        if (!IsAbsoluteUri(options.LoginBaseAddress))
-        {
-            failures.Add("GraphCoreOptions.LoginBaseAddress must be an absolute http(s) URI.");
-        }
-
         if (string.IsNullOrWhiteSpace(options.ApiVersion))
         {
             failures.Add("GraphCoreOptions.ApiVersion must be configured.");
