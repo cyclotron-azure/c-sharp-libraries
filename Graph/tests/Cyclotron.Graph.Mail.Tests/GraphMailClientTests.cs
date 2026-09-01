@@ -187,6 +187,26 @@ public class GraphMailClientTests
     }
 
     [Fact]
+    public async Task GetMessageAsyncGeneric_JsonNode_DeserializesArbitraryFieldsAndNullsOnNotFound()
+    {
+        var (client, handler) = CreateClient();
+        handler.RespondWithJson("""{ "id": "message-1", "subject": "Contract Review" }""");
+
+        var found = await client.GetMessageAsync<System.Text.Json.Nodes.JsonNode>(
+            MailboxId, MessageId, ["id", "subject"], TestContext.Current.CancellationToken);
+
+        Assert.NotNull(found);
+        Assert.Equal("Contract Review", (string?)found["subject"]);
+
+        handler.RespondWithStatus(HttpStatusCode.NotFound);
+
+        var missing = await client.GetMessageAsync<System.Text.Json.Nodes.JsonNode>(
+            MailboxId, MessageId, ["id"], TestContext.Current.CancellationToken);
+
+        Assert.Null(missing);
+    }
+
+    [Fact]
     public async Task GetMessageAsyncGeneric_EmptySelectFields_ThrowsArgumentException()
     {
         var (client, _) = CreateClient();

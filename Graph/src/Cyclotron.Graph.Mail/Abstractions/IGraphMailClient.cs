@@ -56,7 +56,12 @@ public interface IGraphMailClient
     /// Graph <c>$select</c> list. Returns null if the message is not found. Use this overload when
     /// only a subset of fields is needed and the caller has its own projection type.
     /// </summary>
-    /// <typeparam name="T">The caller-supplied type to deserialize Graph's response into.</typeparam>
+    /// <typeparam name="T">
+    /// The caller-supplied type to deserialize Graph's response into. Constrained to reference
+    /// types so a not-found message can be returned as null — a value type's <c>default</c> is a
+    /// real value indistinguishable from data (for <c>JsonElement</c>, an <c>Undefined</c> element
+    /// that throws on first use). For raw-JSON projections use <c>JsonNode</c>.
+    /// </typeparam>
     /// <param name="mailboxId">
     /// The Graph user <c>id</c> — the <c>id</c> property of the Graph <c>user</c> resource, as
     /// returned by <see cref="ResolveMailboxIdAsync"/>. Not an email address: a mailbox may have
@@ -65,7 +70,8 @@ public interface IGraphMailClient
     /// <param name="messageId">The Graph message id.</param>
     /// <param name="selectFields">The Graph <c>$select</c> fields to request.</param>
     /// <param name="ct">Cancellation token.</param>
-    Task<T?> GetMessageAsync<T>(string mailboxId, string messageId, IReadOnlyList<string> selectFields, CancellationToken ct = default);
+    Task<T?> GetMessageAsync<T>(string mailboxId, string messageId, IReadOnlyList<string> selectFields, CancellationToken ct = default)
+        where T : class;
 
     /// <summary>
     /// Replaces the category tags on a message. Throws on any Graph failure.

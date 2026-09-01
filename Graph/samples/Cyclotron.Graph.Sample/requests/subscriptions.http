@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:5280
-@mailboxId = REPLACE-WITH-RESOLVED-GRAPH-USER-ID
-@mailboxAddress = user@contoso.com
+@mailboxId = 50a1bff5-7bc4-4da0-824e-07ac4014571f
+@mailboxAddress = tobys@6w020f.onmicrosoft.com
 @messageId = REPLACE-WITH-GRAPH-MESSAGE-ID
 @subscriptionId = REPLACE-WITH-GRAPH-SUBSCRIPTION-ID
 

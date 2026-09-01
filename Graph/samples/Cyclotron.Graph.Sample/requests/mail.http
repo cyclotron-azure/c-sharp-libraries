@@ -1,6 +1,6 @@
 @baseUrl = http://localhost:5280
-@mailboxAddress = user@contoso.com
-@mailboxId = REPLACE-WITH-RESOLVED-GRAPH-USER-ID
+@mailboxAddress = tobys@6w020f.onmicrosoft.com
+@mailboxId = 50a1bff5-7bc4-4da0-824e-07ac4014571f
 @messageId = REPLACE-WITH-GRAPH-MESSAGE-ID
 @subscriptionId = REPLACE-WITH-GRAPH-SUBSCRIPTION-ID
 
@@ -32,9 +32,10 @@ GET {{baseUrl}}/graph/mailboxes/{{mailboxId}}/messages/{{messageId}}
 ###
 
 ### IGraphMailClient.GetMessageAsync<T> (generic, with selectFields)
-### Deserializes into JsonElement, so any field set works. Expect 200 echoing exactly the fields
-### requested and nothing else. Sending fields= (empty) makes the library throw ArgumentException,
-### which the harness surfaces as a 500.
+### Deserializes into JsonNode, so any field set works (T is constrained to reference types so a
+### missing message can come back as null). Expect 200 echoing exactly the fields requested and
+### nothing else, or 200 with a null body if the message id does not exist. Sending fields= (empty)
+### makes the library throw ArgumentException, which the harness surfaces as a 500.
 GET {{baseUrl}}/graph/mailboxes/{{mailboxId}}/messages/{{messageId}}/select?fields=id,subject,receivedDateTime
 
 ###

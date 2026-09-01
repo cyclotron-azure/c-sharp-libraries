@@ -1,5 +1,5 @@
 @baseUrl = http://localhost:5280
-@mailboxId = REPLACE-WITH-RESOLVED-GRAPH-USER-ID
+@mailboxId = 50a1bff5-7bc4-4da0-824e-07ac4014571f
 @messageId = REPLACE-WITH-GRAPH-MESSAGE-ID
 @subscriptionId = sub-local-001
 # Must equal the configured Graph:Subscription:ClientStateSecret, or every notification below is

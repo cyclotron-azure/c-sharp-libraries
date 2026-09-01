@@ -99,6 +99,7 @@ internal sealed class GraphMailClient : IGraphMailClient
     }
 
     public async Task<T?> GetMessageAsync<T>(string mailboxId, string messageId, IReadOnlyList<string> selectFields, CancellationToken ct = default)
+        where T : class
     {
         if (selectFields is null or { Count: 0 })
         {

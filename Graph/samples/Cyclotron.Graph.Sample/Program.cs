@@ -1,6 +1,7 @@
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using Cyclotron.Graph.Core.Abstractions;
 using Cyclotron.Graph.Core.Models;
+using Cyclotron.Graph.Core.Notifications;
 using Cyclotron.Graph.Mail.Abstractions;
 using Cyclotron.Graph.Mail.Extensions;
 using Cyclotron.Graph.Sample;
@@ -40,10 +41,11 @@ app.MapGet("/graph/mailboxes/{mailboxId}/messages/{messageId}", async (
     string mailboxId, string messageId, IGraphMailClient mail, CancellationToken ct) =>
     Results.Ok(await mail.GetMessageAsync(mailboxId, messageId, ct)));
 
-// IGraphMailClient.GetMessageAsync<T> (generic, with selectFields) — JsonElement so any field set works.
+// IGraphMailClient.GetMessageAsync<T> (generic, with selectFields) — JsonNode so any field set
+// works and a not-found message comes back as null (T is constrained to reference types).
 app.MapGet("/graph/mailboxes/{mailboxId}/messages/{messageId}/select", async (
     string mailboxId, string messageId, string fields, IGraphMailClient mail, CancellationToken ct) =>
-    Results.Ok(await mail.GetMessageAsync<JsonElement>(
+    Results.Ok(await mail.GetMessageAsync<JsonNode>(
         mailboxId, messageId, fields.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), ct)));
 
 // IGraphMailClient.UpdateMessageCategoriesAsync
@@ -109,6 +111,13 @@ app.MapPost("/notifications/messages", async (
     IGraphMessageNotificationSink sink,
     CancellationToken ct) =>
 {
+    // Graph validates this URL at SubscribeAsync time by sending ?validationToken=<token> and
+    // requiring the decoded token echoed back as 200 text/plain — before any dispatch logic.
+    if (GraphSubscriptionHandshake.TryGetValidationToken(request.QueryString.Value, out var token))
+    {
+        return Results.Text(token);
+    }
+
     using var reader = new StreamReader(request.Body);
     var body = await reader.ReadToEndAsync(ct);
 
@@ -123,6 +132,12 @@ app.MapPost("/notifications/lifecycle", async (
     IGraphLifecycleNotificationSink sink,
     CancellationToken ct) =>
 {
+    // Graph validates the lifecycle URL with the same handshake as the notification URL.
+    if (GraphSubscriptionHandshake.TryGetValidationToken(request.QueryString.Value, out var token))
+    {
+        return Results.Text(token);
+    }
+
     using var reader = new StreamReader(request.Body);
     var body = await reader.ReadToEndAsync(ct);
 
