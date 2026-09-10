@@ -115,7 +115,7 @@ at the tunnel's public HTTPS URL instead:
 
 - **VS Code Dev Tunnels** — forward the port in the **Ports** panel, set visibility to **Public**,
   and use the resulting `https://*.devtunnels.ms` URL.
-- **ngrok** — `ngrok http <port>` and use the resulting `https://*.ngrok-free.app` forwarding URL.
+- **ngrok** — `ngrok http 5280` and use the resulting `https://*.ngrok-free.app` forwarding URL.
 
 `NotificationPath` and `LifecycleNotificationPath` should be set once to whatever routes your host
 maps to `IGraphNotificationParser`'s dispatch methods, and left alone after that — they aren't

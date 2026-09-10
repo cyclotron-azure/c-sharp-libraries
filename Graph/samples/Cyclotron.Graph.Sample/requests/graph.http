@@ -1,0 +1,123 @@
+@baseUrl = http://localhost:5280
+@clientId = {{$dotenv CLIENT_ID}}
+@clientSecret = {{$dotenv CLIENT_SECRET}}
+@clientStateSecret = {{$dotenv CLIENT_STATE_SECRET}}
+@deltaFloor = 2026-07-27T00:00:00Z
+# You must url encode the internetmessageid if it has illegal characters like +=/ (<> are ok)
+@internetMessageId = <SA1PR20MB698840D68F2C52AE033572D5881A2@SA1PR20MB6988.namprd20.prod.outlook.com>
+@exposedUrl = {{$dotenv EXPOSED_URL}}
+@mailboxAddress = {{$dotenv MAILBOX_ADDRESS}}
+# @messageId = AAkALgAAAAAAHYQDEapmEc2byACqAC-EWg0ACAotZ_P0UEe7Jq_nXbw3qQAAE_aT-wAA
+@prefer = IdType="ImmutableId", outlook.body-content-type="text"
+@tenantId = {{$dotenv TENANT_ID}}
+@userGuid = {{$dotenv USER_GUID}}
+
+### Get Token - RUN First
+# @name getToken
+POST https://login.microsoftonline.com/{{tenantId}}/oauth2/v2.0/token
+Content-Type: application/x-www-form-urlencoded
+
+client_id={{clientId}}&client_secret={{clientSecret}}&scope=https://graph.microsoft.com/.default&grant_type=client_credentials
+
+### Get Message ID by InternetMessageId - RUN Second
+# @name getMessageId
+GET https://graph.microsoft.com/v1.0/users/{{mailboxAddress}}?$select=id
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+### Get message - RUN after getMessageId to get the messageId from the previous request
+GET https://graph.microsoft.com/v1.0/users/{{mailboxAddress}}/messages/{{getMessageId.response.body.value[0].id}}?$select=internetMessageId,subject,receivedDateTime,body,hasAttachments,from,toRecipients,uniqueBody,categories&$expand=singleValueExtendedProperties($filter=id eq 'String 0x1042' or id eq 'String 0x1039')
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+### Get messages
+GET https://graph.microsoft.com/v1.0/users/{{mailboxAddress}}/messages
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+### Get inbox messages
+GET https://graph.microsoft.com/v1.0/users/{{mailboxAddress}}/mailFolders/inbox/messages
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+### Get Message with MAPI Headers (email must of been forwarded/replied to to have these headers)
+# In-Reply-To MAPI Tag: String 0x1042
+# References MAPI Tag: String 0x1039
+GET https://graph.microsoft.com/v1.0/users/{{mailboxAddress}}/messages/{{getMessageId.response.body.value[0].id}}?$expand=singleValueExtendedProperties($filter=id eq 'String 0x1042' or id eq 'String 0x1039')
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+### Get Message with Headers (only stamped when email crosses internet boundary)
+GET https://graph.microsoft.com/v1.0/users/{{mailboxAddress}}/messages/{{getMessageId.response.body.value[0].id}}?$select=internetMessageHeaders
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+### Delta query — full sync from floor date (returns messages + deltaLink)
+# Use when no stored deltaLink exists (initial enrollment or 410 restart).
+# Adjust @deltaFloor at the top of this file.
+# THE ONLY WAY TO USE singleValueExtendedProperties ON DELTA ENDPOINT IS TO REMOVE $ ON THAT PLUS "filter" as below:
+GET https://graph.microsoft.com/v1.0/users/{{mailboxAddress}}/mailFolders/inbox/messages/delta?$filter=receivedDateTime+ge+{{deltaFloor}}&$select=internetMessageId,subject,receivedDateTime,body,hasAttachments,from,toRecipients,uniqueBody,categories&expand=singleValueExtendedProperties(filter=id eq 'String 0x1042' or id eq 'String 0x1039')
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+### Delta query — prime cursor at current position ($deltatoken=latest)
+# Returns an empty result set with a deltaLink anchored to now.
+# Persist the returned @odata.deltaLink as the starting cursor for a newly enrolled mailbox.
+GET https://graph.microsoft.com/v1.0/users/{{mailboxAddress}}/mailFolders/inbox/messages/delta?$deltatoken=latest
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+### Get user (need application permission (not delegated permision)
+GET https://graph.microsoft.com/v1.0/users?$filter=mail eq '{{mailboxAddress}}'&$select=id,displayName
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+### Get user2  (need application permission (not delegated permision)
+GET https://graph.microsoft.com/v1.0/users/{{mailboxAddress}}
+Authorization: Bearer {{getToken.response.body.access_token}}
+Prefer: {{prefer}}
+Content-Type: application/json
+
+###
+# ─── Subscription Status ─────────────────────────────────────────────────────
+###
+
+### Create subscription — mirrors SubscriptionManager / GraphApiClient.SubscribeAsync
+# @name createSubscription
+POST https://graph.microsoft.com/v1.0/subscriptions
+Authorization: Bearer {{getToken.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "changeType": "created,updated",
+  "notificationUrl": "{{exposedUrl}}/notifications/messages",
+  "lifecycleNotificationUrl": "{{exposedUrl}}/notifications/lifecycle",
+  "resource": "users/{{mailboxAddress}}/messages",
+  "expirationDateTime": "{{$datetime iso8601 1 h}}",
+  "clientState": "{{clientStateSecret}}"
+}
+
+### List all app subscriptions — find resource = users/{{mailboxAddress}}/messages
+# @name getSubscriptions
+GET https://graph.microsoft.com/v1.0/subscriptions
+Authorization: Bearer {{getToken.response.body.access_token}}
+Content-Type: application/json
+
+@subscriptionId = {{getSubscriptions.response.body.$.value[?(@.resource=='users/tobys@6w020f.onmicrosoft.com/messages')].id}}
+
+### Get subscription by ID
+GET https://graph.microsoft.com/v1.0/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{getToken.response.body.access_token}}
+
+### Delete a subscription by ID
+DELETE https://graph.microsoft.com/v1.0/subscriptions/{{subscriptionId}}
+Authorization: Bearer {{getToken.response.body.access_token}}

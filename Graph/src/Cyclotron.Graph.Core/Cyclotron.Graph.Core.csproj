@@ -1,8 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <RootNamespace>Cyclotron.Graph.Core</RootNamespace>
     <AssemblyName>Cyclotron.Graph.Core</AssemblyName>
+    <UserSecretsId>e608e30f-cc7c-4bbd-b3bc-06061237ad61</UserSecretsId>
   </PropertyGroup>
 
   <PropertyGroup Label="NuGet packaging">

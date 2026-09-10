@@ -1,8 +1,7 @@
 @baseUrl = http://localhost:5280
-@mailboxId = 50a1bff5-7bc4-4da0-824e-07ac4014571f
-@mailboxAddress = tobys@6w020f.onmicrosoft.com
-@messageId = REPLACE-WITH-GRAPH-MESSAGE-ID
-@subscriptionId = REPLACE-WITH-GRAPH-SUBSCRIPTION-ID
+@mailboxAddress = {{$dotenv MAILBOX_ADDRESS}}
+@mailboxId = {{$dotenv MAILBOX_ID}}
+@subscriptionId = 8831b268-d388-4c44-b7c9-cac3e2225f34
 
 ###
 # ─── IGraphSubscriptionClient ────────────────────────────────────────────────
@@ -11,60 +10,60 @@
 ###
 
 ### IGraphSubscriptionClient.SubscribeAsync
-### Expect 200 with { id, resourceId, changeTypes, expiresAt }. changeTypes reflects the configured
-### Graph:Subscription:ChangeTypes, and resource is ResourceTemplate with {resourceId} substituted.
-### Copy the returned id into @subscriptionId above. Graph rejects the call if it cannot validate
-### the notificationUrl, which surfaces as a 500.
+# Expect 200 with { id, resourceId, changeTypes, expiresAt }. changeTypes reflects the configured
+# Graph:Subscription:ChangeTypes, and resource is ResourceTemplate with {resourceId} substituted.
+# Copy the returned id into @subscriptionId above. Graph rejects the call if it cannot validate
+# the notificationUrl, which surfaces as a 500.
 POST {{baseUrl}}/graph/subscriptions/{{mailboxId}}
 
 ###
 
 ### IGraphSubscriptionClient.GetActiveSubscribedResourceIdsAsync
-### Expect 200 with the raw resource-path segment of every active subscription. Segments are
-### returned unnormalized — a subscription created before an identifier migration comes back as its
-### address, not an id.
+# Expect 200 with the raw resource-path segment of every active subscription. Segments are
+# returned unnormalized — a subscription created before an identifier migration comes back as its
+# address, not an id.
 GET {{baseUrl}}/graph/subscriptions/active
 
 ###
 
 ### IGraphSubscriptionClient.GetActiveSubscribedResourceIdsAsync (filtered by change type)
-### Expect 200 with only those subscriptions whose changeType overlaps the requested flags.
-### Omitting changeTypes (the request above) means None, which applies no filtering at all.
+# Expect 200 with only those subscriptions whose changeType overlaps the requested flags.
+# Omitting changeTypes (the request above) means None, which applies no filtering at all.
 GET {{baseUrl}}/graph/subscriptions/active?changeTypes=Created
 
 ###
 
 ### IGraphSubscriptionClient.GetSubscriptionByIdAsync
-### Expect 200 with the subscription, or 200 with a null body if Graph 404s that id.
+# Expect 200 with the subscription, or 200 with a null body if Graph 404s that id.
 GET {{baseUrl}}/graph/subscriptions/by-id/{{subscriptionId}}
 
 ###
 
 ### IGraphSubscriptionClient.GetSubscriptionByResourceIdAsync
-### Matches on the resource path's second segment, case-insensitively. Expect 200 with the
-### subscription, or a null body when nothing matches.
+# Matches on the resource path's second segment, case-insensitively. Expect 200 with the
+# subscription, or a null body when nothing matches.
 GET {{baseUrl}}/graph/subscriptions/by-resource/{{mailboxId}}
 
 ###
 
 ### IGraphSubscriptionClient.GetSubscriptionByResourceIdentifiersAsync (transitional overload)
-### Passes TWO identifiers — the current id and the legacy address form. Expect 200 with the
-### subscription when EITHER matches. This is the migration path: a subscription created against
-### the address is found here but NOT by the id-only request above.
+# Passes TWO identifiers — the current id and the legacy address form. Expect 200 with the
+# subscription when EITHER matches. This is the migration path: a subscription created against
+# the address is found here but NOT by the id-only request above.
 GET {{baseUrl}}/graph/subscriptions/by-identifiers?identifiers={{mailboxId}},{{mailboxAddress}}
 
 ###
 
 ### IGraphSubscriptionClient.RenewSubscriptionAsync
-### Issues an HTTP PATCH. Expect 200 with { "expiresAt": "<new expiry>" }, extended by the
-### configured LifespanMinutes.
+# Issues an HTTP PATCH. Expect 200 with { "expiresAt": "<new expiry>" }, extended by the
+# configured LifespanMinutes.
 PATCH {{baseUrl}}/graph/subscriptions/{{subscriptionId}}
 
 ###
 
 ### IGraphSubscriptionClient.UnsubscribeAsync
-### Expect 204 No Content. A 404 from Graph (subscription already gone) is tolerated and still
-### returns 204; any other failure status surfaces as a 500.
+# Expect 204 No Content. A 404 from Graph (subscription already gone) is tolerated and still
+# returns 204; any other failure status surfaces as a 500.
 DELETE {{baseUrl}}/graph/subscriptions/{{subscriptionId}}
 
 ###
